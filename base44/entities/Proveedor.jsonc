@@ -1,0 +1,33 @@
+{
+  "name": "Proveedor",
+  "type": "object",
+  "properties": {
+    "nombre": {
+      "type": "string",
+      "description": "Nombre del proveedor"
+    },
+    "categoria": {
+      "type": "string",
+      "enum": [
+        "Insumos",
+        "Servicios",
+        "Renta",
+        "Equipos",
+        "Mantenimiento",
+        "Otros"
+      ],
+      "default": "Insumos"
+    },
+    "contacto": {
+      "type": "string",
+      "description": "Tel\u00e9fono o email de contacto"
+    },
+    "notas": {
+      "type": "string",
+      "description": "Notas internas"
+    }
+  },
+  "required": [
+    "nombre"
+  ]
+}

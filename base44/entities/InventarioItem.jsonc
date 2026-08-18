@@ -1,0 +1,48 @@
+{
+  "name": "InventarioItem",
+  "type": "object",
+  "properties": {
+    "nombre": {
+      "type": "string",
+      "description": "Nombre del insumo"
+    },
+    "categoria": {
+      "type": "string",
+      "enum": [
+        "Carnes",
+        "Verduras",
+        "L\u00e1cteos",
+        "Bebidas",
+        "Abarrotes",
+        "Limpieza",
+        "Otros"
+      ],
+      "default": "Abarrotes"
+    },
+    "stock_actual": {
+      "type": "number",
+      "default": 0
+    },
+    "stock_minimo": {
+      "type": "number",
+      "default": 0,
+      "description": "Nivel m\u00ednimo de stock para alerta"
+    },
+    "unidad": {
+      "type": "string",
+      "description": "Unidad de medida (kg, lt, pieza, etc.)",
+      "default": "kg"
+    },
+    "ultimo_costo": {
+      "type": "number",
+      "description": "\u00daltimo costo de compra"
+    },
+    "proveedor": {
+      "type": "string",
+      "description": "Proveedor habitual"
+    }
+  },
+  "required": [
+    "nombre"
+  ]
+}

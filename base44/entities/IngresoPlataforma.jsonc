@@ -1,0 +1,60 @@
+{
+  "name": "IngresoPlataforma",
+  "type": "object",
+  "properties": {
+    "plataforma": {
+      "type": "string",
+      "enum": [
+        "Rappi",
+        "Uber Eats",
+        "Didi Food",
+        "Otros"
+      ],
+      "default": "Rappi"
+    },
+    "semana": {
+      "type": "string",
+      "description": "Semana del corte (YYYY-WW)"
+    },
+    "fecha_inicio": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha inicial del corte"
+    },
+    "fecha_fin": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha final del corte"
+    },
+    "monto_corte": {
+      "type": "number",
+      "description": "Monto reportado por la plataforma"
+    },
+    "monto_depositado": {
+      "type": "number",
+      "description": "Monto realmente depositado"
+    },
+    "fecha_deposito": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha en que se deposit\u00f3"
+    },
+    "conciliado": {
+      "type": "boolean",
+      "default": false
+    },
+    "diferencia": {
+      "type": "number",
+      "description": "Diferencia entre corte y dep\u00f3sito"
+    },
+    "notas": {
+      "type": "string",
+      "description": "Notas sobre la conciliaci\u00f3n"
+    }
+  },
+  "required": [
+    "plataforma",
+    "semana",
+    "monto_corte"
+  ]
+}

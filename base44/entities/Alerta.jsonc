@@ -1,0 +1,52 @@
+{
+  "name": "Alerta",
+  "type": "object",
+  "properties": {
+    "tipo": {
+      "type": "string",
+      "enum": [
+        "gasto_alto",
+        "deposito_faltante",
+        "stock_bajo",
+        "ticket_pendiente",
+        "pago_pendiente"
+      ],
+      "default": "gasto_alto"
+    },
+    "titulo": {
+      "type": "string",
+      "description": "T\u00edtulo corto de la alerta"
+    },
+    "mensaje": {
+      "type": "string",
+      "description": "Mensaje detallado"
+    },
+    "severidad": {
+      "type": "string",
+      "enum": [
+        "verde",
+        "amarillo",
+        "rojo"
+      ],
+      "default": "amarillo"
+    },
+    "fecha": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Fecha de generaci\u00f3n"
+    },
+    "leida": {
+      "type": "boolean",
+      "default": false
+    },
+    "entidad_ref": {
+      "type": "string",
+      "description": "Referencia al registro relacionado"
+    }
+  },
+  "required": [
+    "tipo",
+    "titulo",
+    "severidad"
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "name": "Gasto",
+  "type": "object",
+  "properties": {
+    "monto": {
+      "type": "number",
+      "description": "Monto total del gasto"
+    },
+    "fecha": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha del gasto"
+    },
+    "proveedor": {
+      "type": "string",
+      "description": "Nombre del proveedor"
+    },
+    "categoria": {
+      "type": "string",
+      "enum": [
+        "Insumos",
+        "Servicios",
+        "Renta",
+        "Equipos",
+        "Mantenimiento",
+        "Otros"
+      ],
+      "default": "Insumos"
+    },
+    "metodo_pago": {
+      "type": "string",
+      "enum": [
+        "Tarjeta de cr\u00e9dito",
+        "Transferencia",
+        "Efectivo",
+        "Otros"
+      ],
+      "default": "Tarjeta de cr\u00e9dito"
+    },
+    "ticket_foto_url": {
+      "type": "string",
+      "description": "URL de la foto del ticket"
+    },
+    "descripcion": {
+      "type": "string",
+      "description": "Descripci\u00f3n del gasto"
+    },
+    "facturado": {
+      "type": "boolean",
+      "default": false
+    },
+    "pagado": {
+      "type": "boolean",
+      "default": false
+    },
+    "semana": {
+      "type": "string",
+      "description": "Semana del gasto (YYYY-WW)"
+    }
+  },
+  "required": [
+    "monto",
+    "fecha",
+    "proveedor"
+  ]
+}
