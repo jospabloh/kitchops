@@ -1,66 +1,65 @@
 {
   "name": "Gasto",
   "type": "object",
+  "description": "Un gasto del restaurante: compra a proveedor, servicio, renta, mantenimiento. Es la entidad que más se captura desde WhatsApp (foto del ticket).",
   "properties": {
-    "monto": {
-      "type": "number",
-      "description": "Monto total del gasto"
-    },
-    "fecha": {
-      "type": "string",
-      "format": "date",
-      "description": "Fecha del gasto"
-    },
-    "proveedor": {
-      "type": "string",
-      "description": "Nombre del proveedor"
-    },
+    "business_id": { "type": "string", "description": "Tenant (Business.id) dueño de este registro" },
+    "monto": { "type": "number", "description": "Monto total del gasto" },
+    "fecha": { "type": "string", "format": "date", "description": "Fecha del gasto" },
+    "proveedor": { "type": "string", "description": "Nombre del proveedor" },
     "categoria": {
       "type": "string",
-      "enum": [
-        "Insumos",
-        "Servicios",
-        "Renta",
-        "Equipos",
-        "Mantenimiento",
-        "Otros"
-      ],
+      "enum": ["Insumos", "Servicios", "Renta", "Equipos", "Mantenimiento", "Otros"],
       "default": "Insumos"
     },
     "metodo_pago": {
       "type": "string",
-      "enum": [
-        "Tarjeta de cr\u00e9dito",
-        "Transferencia",
-        "Efectivo",
-        "Otros"
-      ],
-      "default": "Tarjeta de cr\u00e9dito"
+      "enum": ["Tarjeta de crédito", "Transferencia", "Efectivo", "Otros"],
+      "default": "Tarjeta de crédito"
     },
-    "ticket_foto_url": {
+    "ticket_foto_url": { "type": "string", "description": "URL de la foto del ticket" },
+    "descripcion": { "type": "string", "description": "Descripción del gasto" },
+    "facturado": { "type": "boolean", "default": false },
+    "pagado": { "type": "boolean", "default": false },
+    "semana": { "type": "string", "description": "Semana del gasto (YYYY-WW)" },
+    "origen": {
       "type": "string",
-      "description": "URL de la foto del ticket"
-    },
-    "descripcion": {
-      "type": "string",
-      "description": "Descripci\u00f3n del gasto"
-    },
-    "facturado": {
-      "type": "boolean",
-      "default": false
-    },
-    "pagado": {
-      "type": "boolean",
-      "default": false
-    },
-    "semana": {
-      "type": "string",
-      "description": "Semana del gasto (YYYY-WW)"
+      "enum": ["app", "whatsapp"],
+      "default": "app",
+      "description": "Cómo se capturó el gasto. 'whatsapp' lo escribe el agente de WhatsApp vía función de servicio."
     }
   },
-  "required": [
-    "monto",
-    "fecha",
-    "proveedor"
-  ]
+  "required": ["business_id", "monto", "fecha", "proveedor"],
+  // RLS (Module 4): tenant branch + explicit service-role admin branch on all
+  // four ops. staff captura y corrige gastos (es su trabajo diario); borrar es
+  // de business_admin, porque un gasto borrado desaparece del corte semanal sin
+  // dejar rastro en la cuenta de resultados.
+  "rls": {
+    "create": {
+      "$or": [
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "staff" } }] },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "read": {
+      "$or": [
+        { "data.business_id": "{{user.data.business_id}}" },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "update": {
+      "$or": [
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "staff" } }] },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "delete": {
+      "$or": [
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
+        { "user_condition": { "role": "admin" } }
+      ]
+    }
+  }
 }

@@ -1,0 +1,101 @@
+{
+  // Per-tenant configuration of the KitchOps WhatsApp agent (AgentKit).
+  //
+  // THE TWO FIELDS THAT MATTER FOR SECURITY:
+  //
+  // 1. `provider_account_id` / `provider_phone_number_id` — the webhook arrives
+  //    with NO user token (it comes from Zernio/Meta, not from a browser), so
+  //    the ONLY way the handler can tell which restaurant a message belongs to
+  //    is by looking the inbound account up here. This is the tenant-resolution
+  //    key; a duplicate value across two businesses would route one kitchen's
+  //    messages into another's books, so whatsappAdmin:saveConfigSafe refuses to
+  //    save a value already claimed by a different business_id.
+  //
+  // 2. `numeros_autorizados` — the allowlist of phone numbers that may command
+  //    the agent. This agent WRITES financial records, so "anyone who can find
+  //    the restaurant's WhatsApp number" is not an acceptable authorization
+  //    model. A message from an unlisted number gets a polite "no puedo ayudarte
+  //    por aquí" and never reaches the tool layer. Each entry carries the role
+  //    the sender acts as, so the same permission registry that gates the web UI
+  //    gates the bot (see functions/whatsapp/handlers/_permissions.ts).
+  //
+  // API keys and webhook secrets are NOT stored here — they live in Base44 app
+  // secrets (ANTHROPIC_API_KEY, ZERNIO_API_KEY, ZERNIO_WEBHOOK_SECRET,
+  // META_ACCESS_TOKEN, META_APP_SECRET, META_VERIFY_TOKEN). An entity row is
+  // readable by every member of the tenant; a secret must not be.
+  "name": "WhatsAppConfig",
+  "type": "object",
+  "properties": {
+    "business_id": { "type": "string", "description": "Tenant (Business.id) dueño de esta configuración" },
+    "activo": { "type": "boolean", "default": false, "description": "Si el agente responde. Apagado = el webhook acepta y descarta." },
+    "proveedor": {
+      "type": "string",
+      "enum": ["zernio", "meta"],
+      "default": "zernio",
+      "description": "Proveedor de WhatsApp. Zernio corre sobre la Cloud API de Meta y resuelve el Embedded Signup; Meta directo requiere app de Facebook propia."
+    },
+    "provider_account_id": { "type": "string", "description": "Zernio: accountId. Necesario para responder y para resolver el tenant desde el webhook." },
+    "provider_phone_number_id": { "type": "string", "description": "Meta: Phone Number ID. Mismo papel que provider_account_id en Zernio." },
+    "numero_visible": { "type": "string", "description": "Número de WhatsApp del negocio, en E.164, sólo para mostrar en la UI" },
+    "agente_nombre": { "type": "string", "default": "Kitch", "description": "Nombre con el que el agente se presenta" },
+    "agente_tono": {
+      "type": "string",
+      "enum": ["profesional", "amigable", "directo"],
+      "default": "amigable",
+      "description": "Tono de las respuestas"
+    },
+    "instrucciones_extra": {
+      "type": "string",
+      "description": "Contexto libre del negocio que se inyecta en el system prompt (horarios, proveedores frecuentes, cómo llaman a las cosas en esta cocina)."
+    },
+    "modelo": {
+      "type": "string",
+      "default": "claude-sonnet-5",
+      "description": "Modelo de Claude que atiende. Es decisión del dueño del negocio: no lo bajes por tu cuenta para ahorrar."
+    },
+    "numeros_autorizados": {
+      "type": "array",
+      "description": "Allowlist de quién puede darle órdenes al agente. Cada entrada: { numero (E.164), nombre, rol: business_admin|staff }.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "numero": { "type": "string", "description": "Número en E.164, p.ej. +5215512345678" },
+          "nombre": { "type": "string" },
+          "rol": { "type": "string", "enum": ["business_admin", "staff"], "default": "staff" }
+        }
+      }
+    },
+    "empujar_alertas": { "type": "boolean", "default": false, "description": "Empujar alertas críticas por WhatsApp además de mostrarlas en la app" },
+    "ultimo_mensaje_at": { "type": "string", "format": "date-time", "description": "Último mensaje procesado (diagnóstico)" },
+    "ultimo_error": { "type": "string", "description": "Último error del webhook, para que el dueño vea que algo se rompió sin abrir logs" }
+  },
+  "required": ["business_id"],
+  // RLS (Module 4): configurar el agente es cosa del dueño. staff puede leerla
+  // (la UI muestra el estado del agente en el panel), nunca escribirla.
+  "rls": {
+    "create": {
+      "$or": [
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "read": {
+      "$or": [
+        { "data.business_id": "{{user.data.business_id}}" },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "update": {
+      "$or": [
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "delete": {
+      "$or": [
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
+        { "user_condition": { "role": "admin" } }
+      ]
+    }
+  }
+}

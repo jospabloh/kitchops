@@ -1,33 +1,47 @@
 {
   "name": "Proveedor",
   "type": "object",
+  "description": "Catálogo de proveedores del restaurante. Es catálogo, no operación: sólo business_admin lo edita.",
   "properties": {
-    "nombre": {
-      "type": "string",
-      "description": "Nombre del proveedor"
-    },
+    "business_id": { "type": "string", "description": "Tenant (Business.id) dueño de este registro" },
+    "nombre": { "type": "string", "description": "Nombre del proveedor" },
     "categoria": {
       "type": "string",
-      "enum": [
-        "Insumos",
-        "Servicios",
-        "Renta",
-        "Equipos",
-        "Mantenimiento",
-        "Otros"
-      ],
+      "enum": ["Insumos", "Servicios", "Renta", "Equipos", "Mantenimiento", "Otros"],
       "default": "Insumos"
     },
-    "contacto": {
-      "type": "string",
-      "description": "Tel\u00e9fono o email de contacto"
-    },
-    "notas": {
-      "type": "string",
-      "description": "Notas internas"
-    }
+    "contacto": { "type": "string", "description": "Teléfono o email de contacto" },
+    "whatsapp": { "type": "string", "description": "Número de WhatsApp en formato E.164 (+52...)" },
+    "notas": { "type": "string", "description": "Notas internas" },
+    "activo": { "type": "boolean", "default": true }
   },
-  "required": [
-    "nombre"
-  ]
+  "required": ["business_id", "nombre"],
+  // RLS (Module 4): catálogo — create/update/delete sólo business_admin (más el
+  // servicio). staff lee, para poder elegir proveedor al capturar un gasto.
+  "rls": {
+    "create": {
+      "$or": [
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "read": {
+      "$or": [
+        { "data.business_id": "{{user.data.business_id}}" },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "update": {
+      "$or": [
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "delete": {
+      "$or": [
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
+        { "user_condition": { "role": "admin" } }
+      ]
+    }
+  }
 }

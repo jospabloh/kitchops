@@ -1,0 +1,47 @@
+{
+  // One message in a SupportTicket thread. Kept as a separate entity (rather
+  // than an inline array on the ticket) because that is the shape Mission
+  // Control's `tickets.thread` bridge action already knows how to read, and
+  // because two people replying at once cannot clobber each other's message
+  // the way an array patch can.
+  //
+  // `author_role` distinguishes the ACACIA operator ("owner") from the
+  // restaurant ("tenant"). It is set server-side by the function that creates
+  // the row — never taken from the client, or a tenant could post a message
+  // that renders as an official support reply.
+  "name": "SupportTicketMessage",
+  "type": "object",
+  "properties": {
+    "business_id": { "type": "string", "description": "Tenant (Business.id) dueño del hilo" },
+    "ticket_id": { "type": "string", "description": "SupportTicket.id al que pertenece" },
+    "body": { "type": "string", "description": "Contenido del mensaje" },
+    "author_role": {
+      "type": "string",
+      "enum": ["owner", "tenant"],
+      "default": "tenant",
+      "description": "'owner' = soporte ACACIA (lo escribe Mission Control vía bridge); 'tenant' = el restaurante.",
+      "rls": { "write": { "user_condition": { "role": "admin" } } }
+    },
+    "author_email": { "type": "string", "description": "Email del autor" },
+    "author_name": { "type": "string", "description": "Nombre para mostrar" },
+    "sent_at": { "type": "string", "format": "date-time" }
+  },
+  "required": ["business_id", "ticket_id", "body"],
+  "rls": {
+    "create": {
+      "$or": [
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "staff" } }] },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "read": {
+      "$or": [
+        { "data.business_id": "{{user.data.business_id}}" },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "update": { "user_condition": { "role": "admin" } },
+    "delete": { "user_condition": { "role": "admin" } }
+  }
+}
