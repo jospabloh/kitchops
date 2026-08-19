@@ -1,10 +1,14 @@
 export const CATEGORIAS = ["Insumos", "Servicios", "Renta", "Equipos", "Mantenimiento", "Otros"];
 
-export interface ValidationResult {
-  ok: boolean;
-  message?: string;
-  fields?: Record<string, unknown>;
-}
+// Discriminated union, not { ok: boolean; fields?: ... }: with the optional
+// shape every caller has to write `validated.fields!` after already checking
+// `ok`, and a non-null assertion is exactly the thing that stops being true
+// when someone adds an early return. Here, `if (!validated.ok) return` narrows
+// `fields` to defined for the rest of the function, and the compiler enforces
+// it.
+export type ValidationResult =
+  | { ok: true; fields: Record<string, unknown> }
+  | { ok: false; message: string };
 
 /**
  * Normalize a Mexican mobile number to E.164, which is the only form the
