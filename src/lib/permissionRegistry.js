@@ -24,7 +24,12 @@
 // The WhatsApp agent resolves the same keys for the number that messaged it
 // (base44/functions/whatsapp/handlers/_permissions.ts), so a staff phone cannot
 // do over WhatsApp what that person cannot do in the app.
-import { ROLES } from "./rbac";
+// NOTE the explicit ".js": this file is imported both by Vite (which resolves
+// extensionless paths) and by scripts/generate-function-shared.mjs running under
+// plain Node ESM (which does not). Dropping the extension breaks the generator
+// with ERR_MODULE_NOT_FOUND while the app keeps building fine — so the mismatch
+// only shows up at release time.
+import { ROLES } from "./rbac.js";
 
 export const PERMISSION_REGISTRY = {
   // ── Resumen ───────────────────────────────────────────────────────────────
