@@ -36,26 +36,31 @@ export default function AuthLayout({ icon: Icon, title, subtitle = null, footer 
       </div>
 
       <div className="relative hidden overflow-hidden border-l border-border lg:block">
+        {/* The gear mark, oversized and bled off the corner. The square mark
+            rather than the horizontal lockup on purpose: the lockup's aspect
+            ratio has nothing to do with this panel's, so object-cover crops it
+            somewhere arbitrary and half a wordmark shows through, which reads as
+            a mistake rather than as texture. A square crops predictably at any
+            panel size, and the gear is a strong enough shape to survive it. */}
         <img
-          src="/logo-lockup-1200.jpg"
+          src="/logo-512.jpg"
           alt=""
           aria-hidden="true"
-          className="absolute inset-0 h-full w-full object-cover opacity-[0.18]"
+          className="pointer-events-none absolute -right-[18%] top-1/2 w-[85%] -translate-y-1/2 opacity-[0.12] blur-[1px]"
         />
-        <div className="absolute inset-0 bg-gradient-to-br from-carbon/70 via-carbon/85 to-carbon" />
+        <div className="absolute inset-0 bg-gradient-to-br from-carbon via-carbon/90 to-carbon/70" />
+        <div className="absolute -left-24 top-1/4 h-96 w-96 rounded-full bg-copper/[0.07] blur-3xl" />
 
         <div className="absolute inset-0 flex flex-col justify-center px-12">
           <p className="eyebrow text-copper">Control de tu cocina</p>
-          <h2 className="mt-4 font-display text-[2.75rem] font-bold uppercase leading-[0.95] tracking-tight">
-            Sabes cuánto
-            <br />
-            vendiste.
-            <br />
-            <span className="text-copper">¿Sabes cuánto</span>
-            <br />
-            <span className="text-copper">te quedó?</span>
+          {/* Wrapped by max-width rather than by hard <br />: the display face
+              is condensed, so hardcoded breaks that look right in it fall apart
+              the moment the font hasn't loaded yet. */}
+          <h2 className="mt-4 max-w-[13ch] font-display text-[3.25rem] font-bold uppercase leading-[0.92] tracking-tight">
+            Sabes cuánto vendiste.{" "}
+            <span className="text-copper">¿Sabes cuánto te quedó?</span>
           </h2>
-          <p className="mt-5 max-w-sm text-sm leading-relaxed text-slate">
+          <p className="mt-6 max-w-sm text-sm leading-relaxed text-slate">
             Gastos, cortes de Rappi y Uber Eats, inventario y alertas en un solo lugar — y un
             asistente en WhatsApp para capturarlos sin abrir la computadora.
           </p>
