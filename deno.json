@@ -1,0 +1,25 @@
+{
+  "lint": {
+    "include": [
+      "base44/functions/",
+      "base44/tests/"
+    ],
+    "rules": {
+      "exclude": [
+        "no-import-prefix",
+        "no-explicit-any",
+        "no-unused-vars",
+        "require-await",
+        "no-empty",
+        "camelcase"
+      ]
+    }
+  },
+  "fmt": {
+    "include": [
+      "base44/functions/",
+      "base44/tests/"
+    ],
+    "lineWidth": 100
+  }
+}
