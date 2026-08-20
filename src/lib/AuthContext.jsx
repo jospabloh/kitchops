@@ -7,6 +7,12 @@ const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  // The caller's tenant (Module 1: billing_status/plan live here, written
+  // only by Mission Control). null until the user has completed onboarding
+  // (see complete-onboarding function) or while it's loading.
+  const [business, setBusiness] = useState(null);
+  const [memberships, setMemberships] = useState([]);
+  const [isLoadingBusiness, setIsLoadingBusiness] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [isLoadingPublicSettings, setIsLoadingPublicSettings] = useState(true);
@@ -98,20 +104,84 @@ export const AuthProvider = ({ children }) => {
       setIsAuthenticated(true);
       setIsLoadingAuth(false);
       setAuthChecked(true);
+      await loadBusiness(currentUser);
+      await loadMemberships(currentUser);
+      return currentUser;
     } catch (error) {
       console.error('User auth check failed:', error);
       setIsLoadingAuth(false);
       setIsAuthenticated(false);
       setAuthChecked(true);
-      
-      // If user auth fails, it might be an expired token
-      if (error.status === 401 || error.status === 403) {
+
+      // Only 401 means the session/token itself is invalid or expired — a 403
+      // is a permission/business-logic error (e.g. RLS rejecting the call for
+      // an otherwise-valid, signed-in user) and must not be treated as "not
+      // logged in", or a legitimate session would get bounced to /login.
+      if (error.status === 401) {
         setAuthError({
           type: 'auth_required',
           message: 'Authentication required'
         });
       }
     }
+  };
+
+  // Loads the caller's own tenant (Business). A user who hasn't finished
+  // onboarding yet (see complete-onboarding function) has no business_id —
+  // that's expected, not an error; callers should route to /onboarding.
+  const loadBusiness = async (forUser) => {
+    if (!forUser?.business_id) {
+      setBusiness(null);
+      return;
+    }
+    setIsLoadingBusiness(true);
+    try {
+      const record = await base44.entities.Business.get(forUser.business_id);
+      setBusiness(record || null);
+    } catch (error) {
+      console.error('Failed to load business:', error);
+      setBusiness(null);
+    } finally {
+      setIsLoadingBusiness(false);
+    }
+  };
+
+  const refreshBusiness = () => loadBusiness(user);
+
+  // Every tenant this user may enter. Read straight from Membership, whose RLS
+  // matches the caller's own rows on {{user.id}} — deliberately NOT scoped by
+  // business_id, since the whole point is to list the tenants they are *not*
+  // currently in. Seeing a membership grants nothing on its own: entering a
+  // tenant still goes through the switch-tenant function, which re-checks
+  // membership server-side before repointing business_id.
+  const loadMemberships = async (forUser) => {
+    if (!forUser?.id) {
+      setMemberships([]);
+      return [];
+    }
+    try {
+      const rows = await base44.entities.Membership.filter({ user_id: forUser.id });
+      const list = rows || [];
+      setMemberships(list);
+      return list;
+    } catch (error) {
+      // Never a hard failure: a user with one tenant does not need this list,
+      // and the app must stay usable if it cannot be read.
+      console.error('Failed to load memberships:', error);
+      setMemberships([]);
+      return [];
+    }
+  };
+
+  const refreshMemberships = () => loadMemberships(user);
+
+  // Moving between tenants is a server-side operation by design — business_id
+  // is field-locked precisely so the browser cannot point itself anywhere.
+  const switchTenant = async (businessId) => {
+    await base44.functions.invoke('switch-tenant', { businessId });
+    const refreshed = await checkUserAuth();
+    await loadBusiness(refreshed || { ...user, business_id: businessId });
+    return refreshed;
   };
 
   const logout = (shouldRedirect = true) => {
@@ -133,9 +203,15 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      isAuthenticated, 
+    <AuthContext.Provider value={{
+      user,
+      business,
+      memberships,
+      refreshMemberships,
+      switchTenant,
+      isLoadingBusiness,
+      refreshBusiness,
+      isAuthenticated,
       isLoadingAuth,
       isLoadingPublicSettings,
       authError,
