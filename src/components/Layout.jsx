@@ -5,6 +5,7 @@ import {
   BookOpen,
   Gauge,
   LifeBuoy,
+  LogOut,
   Menu,
   MessageCircle,
   Package,
@@ -19,6 +20,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/lib/PermissionContext";
+import { useAuth } from "@/lib/AuthContext";
+import { ROLE_LABELS } from "@/lib/rbac";
 import TenantSwitcher from "@/components/TenantSwitcher";
 import { LogoMark } from "@/components/Logo";
 
@@ -86,6 +89,7 @@ export default function Layout() {
   const location = useLocation();
   const [abierto, setAbierto] = useState(false);
   const { can, business } = usePermissions();
+  const { user, logout } = useAuth();
 
   const grupos = GRUPOS.map((g) => ({
     ...g,
@@ -177,6 +181,42 @@ export default function Layout() {
             </p>
           </div>
         )}
+
+        {/* Who you are, and what you are inside this restaurant.
+            In a multi-tenant app where one person can be dueño of one business
+            and personal in another, "which account am I signed in as" and "what
+            can I do here" are two different questions, and both get answered
+            wrong from memory. The role label is not decoration: it is why a
+            given button is or isn't on screen. */}
+        <div className="shrink-0 border-t border-sidebar-border p-3">
+          <div className="flex items-center gap-2.5 rounded-md px-2 py-2">
+            <span
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-copper/20 font-display text-sm font-bold uppercase text-copper"
+              aria-hidden="true"
+            >
+              {(user?.full_name || user?.email || "?").trim().charAt(0)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-chalk" title={user?.email}>
+                {user?.full_name || user?.email || "Sin sesión"}
+              </p>
+              {/* Role only — the tenant is already the sidebar's headline right
+                  above, and repeating it here just truncated both. */}
+              <p className="truncate text-[0.6875rem] text-slate-dim">
+                {ROLE_LABELS[user?.role] || user?.role || "—"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => logout()}
+              title="Cerrar sesión"
+              aria-label="Cerrar sesión"
+              className="shrink-0 rounded-sm p-1.5 text-slate-dim transition-colors hover:bg-steel-high hover:text-chalk"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
       </aside>
 
       {abierto && (
