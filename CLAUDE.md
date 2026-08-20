@@ -167,3 +167,27 @@ scaffold (5 entities, no tenant, no RLS, no permissions) to full compliance in
 one pass, together with the WhatsApp agent. Not yet verified: a live browser
 session as a permission-restricted `staff` against the deployed app, and a real
 inbound WhatsApp message end to end. Both need a deployed backend with secrets.
+
+### Deployed-schema state (2026-08-20) — read before touching an entity
+
+Per "the repo `.jsonc` is not the deployed schema" above, the live Base44 app
+(`6a83b727bb6cfcaac263ab0d`) and this repo are **deliberately not in sync yet**:
+
+- **Deployed** — all 12 *additive* entities: `Business`, `Membership`,
+  `PermissionProfile`, `AuditLog`, `AppSession`, `AppSettings`, `SupportTicket`,
+  `SupportTicketMessage`, `WhatsAppConfig`, `WhatsAppConversacion`,
+  `WhatsAppMensaje`, `WhatsAppEvento`. Adding these breaks nothing, because the
+  currently-deployed client never reads them.
+- **Held back on purpose, until this branch merges:**
+  1. The modifications to `Gasto` / `IngresoPlataforma` / `InventarioItem` /
+     `Proveedor` / `Alerta` that add a required `business_id` and tenant RLS.
+     Deploying them first would break the deployed client, which writes those
+     entities with no `business_id` at all.
+  2. The `User` field-lock on `role`/`business_id`. It needs
+     `complete-onboarding` and `switch-tenant` live first — those are the only
+     writers left once the lock is on, and functions deploy on merge to main.
+
+Deploy both immediately after merging, and re-check with `list_entity_schemas`
+rather than assuming the merge did it. The live app currently holds one user
+(role `admin`) plus seeded demo data, so the admin RLS branch carries no
+lockout risk for this cutover — that will not be true once real tenants exist.
