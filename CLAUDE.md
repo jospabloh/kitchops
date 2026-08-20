@@ -98,6 +98,15 @@ provider's adapter. That assumes one business per deployment. KitchOps is
 multi-tenant, so provider is a per-restaurant setting and both Zernio and Meta
 ship; exactly one runs per message, chosen by that tenant's `WhatsAppConfig`.
 
+**Do not reintroduce `npm:@anthropic-ai/sdk` here.** `_brain.ts` calls the
+Messages API with plain `fetch` because Base44's bundler cannot resolve the
+SDK's transitive `zod` dependency — the function fails to deploy with
+`upload_script: HTTP 400: [10021] Uncaught Error: No such module "zod"`, which
+only shows up at `base44 functions deploy`, never in lint, build or tests. It
+was the one function in the app that imported the SDK, and the only one that
+failed. The upside: `_brain.ts` now imports nothing external, so CI type-checks
+it alongside `_tools.ts` and `_providers.ts`.
+
 **Authorization is an allowlist of phone numbers**, each carrying the role it
 acts as. Anyone else gets a polite brush-off and never reaches the tool layer —
 "whoever knows the number" is not an authorization model for something that

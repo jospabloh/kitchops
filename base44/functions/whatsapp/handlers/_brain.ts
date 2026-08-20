@@ -9,9 +9,50 @@
 // claude-opus-5, overridable per tenant on WhatsAppConfig.modelo. Do NOT lower
 // it on someone's behalf to save money; that is the owner's call, and a cheaper
 // model that mis-reads a ticket costs more than the tokens it saved.
+//
+// WHY RAW fetch AND NOT npm:@anthropic-ai/sdk. The SDK is the right default
+// everywhere else, and this file used it until the first real deploy:
+//
+//   error deploying function "whatsapp": upload_script: HTTP 400: [10021]
+//   Uncaught Error: No such module "zod". imported from "_bundled.mjs"
+//
+// Base44 bundles each function into a single module, and its bundler does not
+// resolve the SDK's transitive `zod` dependency. Every other function in this
+// app deployed fine — this was the only one importing the SDK. The Messages API
+// call below is one POST, so dropping to fetch costs nothing and removes a whole
+// class of bundler failure from the app's only public endpoint. It also matches
+// what the rest of this directory already does: _providers.ts hand-rolls HMAC on
+// Web Crypto rather than pull a library, which is what keeps it unit-testable.
+//
+// The types below are the narrow slice of the wire format this file touches,
+// not a reimplementation of the SDK's types.
 
-import Anthropic from "npm:@anthropic-ai/sdk@0.72.0";
 import { TOOL_DEFINITIONS, ejecutarTool, type ToolContext } from "./_tools.ts";
+
+const API_URL = "https://api.anthropic.com/v1/messages";
+const API_VERSION = "2023-06-01";
+
+type ContentBlock =
+  | { type: "text"; text: string }
+  | { type: "thinking"; thinking: string }
+  | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
+  | { type: string; [k: string]: unknown };
+
+type ContentBlockParam =
+  | { type: "text"; text: string }
+  | { type: "image"; source: { type: "base64"; media_type: string; data: string } }
+  | { type: "tool_result"; tool_use_id: string; content: string; is_error: boolean }
+  | ContentBlock;
+
+interface MessageParam {
+  role: "user" | "assistant";
+  content: string | ContentBlockParam[];
+}
+
+interface MessageResponse {
+  content: ContentBlock[];
+  stop_reason: string | null;
+}
 
 export const DEFAULT_MODEL = "claude-opus-5";
 
@@ -92,7 +133,6 @@ export async function pensarYResponder(input: BrainInput): Promise<BrainResult> 
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY no está configurada en los secretos de la app.");
 
-  const client = new Anthropic({ apiKey });
   const { ctx, config, historial, mensaje, imagen } = input;
 
   const system = construirSystemPrompt(config, ctx.business, ctx.remitente);
@@ -101,22 +141,18 @@ export async function pensarYResponder(input: BrainInput): Promise<BrainResult> 
   // turns are deliberately NOT replayed: the results are already reflected in
   // the data the tools read, and re-sending them invites the model to "confirm"
   // an action a second time.
-  const messages: Anthropic.MessageParam[] = [];
+  const messages: MessageParam[] = [];
   for (const m of historial) {
     const texto = (m.texto || "").trim();
     if (!texto) continue;
     messages.push({ role: m.direccion === "entrante" ? "user" : "assistant", content: texto });
   }
 
-  const contenidoActual: Anthropic.ContentBlockParam[] = [];
+  const contenidoActual: ContentBlockParam[] = [];
   if (imagen) {
     contenidoActual.push({
       type: "image",
-      source: {
-        type: "base64",
-        media_type: imagen.mime as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
-        data: imagen.base64,
-      },
+      source: { type: "base64", media_type: imagen.mime, data: imagen.base64 },
     });
   }
   contenidoActual.push({
@@ -129,18 +165,36 @@ export async function pensarYResponder(input: BrainInput): Promise<BrainResult> 
   let respuesta = "";
 
   for (let turno = 0; turno < MAX_TURNS; turno++) {
-    const response = await client.messages.create({
-      model: config.modelo || DEFAULT_MODEL,
-      max_tokens: MAX_TOKENS,
-      system,
-      // Adaptive thinking with medium effort: the reasoning here is "which tool,
-      // with what arguments" rather than deep analysis, and the customer is
-      // watching a WhatsApp thread waiting for a reply.
-      thinking: { type: "adaptive" },
-      output_config: { effort: "medium" },
-      tools: TOOL_DEFINITIONS as unknown as Anthropic.Tool[],
-      messages,
+    const httpResponse = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": API_VERSION,
+      },
+      body: JSON.stringify({
+        model: config.modelo || DEFAULT_MODEL,
+        max_tokens: MAX_TOKENS,
+        system,
+        // Adaptive thinking with medium effort: the reasoning here is "which
+        // tool, with what arguments" rather than deep analysis, and the customer
+        // is watching a WhatsApp thread waiting for a reply.
+        thinking: { type: "adaptive" },
+        output_config: { effort: "medium" },
+        tools: TOOL_DEFINITIONS,
+        messages,
+      }),
     });
+
+    if (!httpResponse.ok) {
+      // Surface the API's own message: "credit balance too low" and "overloaded"
+      // are the two a restaurant owner will actually hit, and they need to reach
+      // WhatsAppConfig.ultimo_error rather than die in a log nobody reads.
+      const detalle = (await httpResponse.text()).slice(0, 500);
+      throw new Error(`Anthropic HTTP ${httpResponse.status}: ${detalle}`);
+    }
+
+    const response = (await httpResponse.json()) as MessageResponse;
 
     // A safety decline still has to become a sentence in the thread — silence
     // reads as a broken bot.
@@ -152,22 +206,25 @@ export async function pensarYResponder(input: BrainInput): Promise<BrainResult> 
     }
 
     const textoDeEsteTurno = response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .filter((b): b is { type: "text"; text: string } => b.type === "text")
       .map((b) => b.text)
       .join("\n")
       .trim();
     if (textoDeEsteTurno) respuesta = textoDeEsteTurno;
 
     const toolUses = response.content.filter(
-      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+      (b): b is { type: "tool_use"; id: string; name: string; input: Record<string, unknown> } =>
+        b.type === "tool_use",
     );
     if (response.stop_reason !== "tool_use" || toolUses.length === 0) break;
 
+    // Echoed back unchanged, thinking blocks included — the API needs them intact
+    // to continue the same turn.
     messages.push({ role: "assistant", content: response.content });
 
     // All results go back in ONE user message — splitting them teaches the model
     // to stop making parallel calls.
-    const resultados: Anthropic.ToolResultBlockParam[] = [];
+    const resultados: ContentBlockParam[] = [];
     for (const call of toolUses) {
       const outcome = await ejecutarTool(ctx, call.name, call.input as Record<string, unknown>);
       acciones.push({
