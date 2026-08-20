@@ -80,4 +80,5 @@ jobs:
             base44/functions/proveedores/handlers/_proveedorFields.ts \
             base44/functions/alertas/handlers/_alertEngine.ts \
             base44/functions/whatsapp/handlers/_tools.ts \
-            base44/functions/whatsapp/handlers/_providers.ts
+            base44/functions/whatsapp/handlers/_providers.ts \
+            base44/functions/whatsapp/handlers/_brain.ts
