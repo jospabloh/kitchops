@@ -114,6 +114,19 @@ writes financial records. Every tool then resolves the same permission key its
 button in the app is gated on, so a cook cannot do by WhatsApp what they cannot
 do in the UI.
 
+**The webhook URL is on the app's own subdomain, not the platform domain:**
+
+```
+https://<app-subdomain>.base44.app/api/apps/<appId>/functions/whatsapp
+```
+
+`https://app.base44.com/api/apps/.../functions/whatsapp` answers **403** —
+*"Backend functions cannot be accessed from the platform domain"* — for every
+request, including a provider's. Registered with the wrong host, the webhook
+looks like a broken integration rather than a wrong URL. An unsigned POST to the
+right host returns `401 unauthorized`, which is the cheapest way to confirm the
+function is deployed and running without sending a real message.
+
 Secrets live in Base44 app secrets, never in an entity: `ANTHROPIC_API_KEY`,
 `ZERNIO_API_KEY`, `ZERNIO_WEBHOOK_SECRET`, `META_ACCESS_TOKEN`,
 `META_APP_SECRET`, `META_VERIFY_TOKEN`, `INGEST_HMAC_SECRET`,
