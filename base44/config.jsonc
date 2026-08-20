@@ -1,7 +1,9 @@
 {
-  "name": "New App",
+  // Shown in the Base44 dashboard and builder. It was "New App"; the product is
+  // KitchOps.
+  "name": "KitchOps",
   "site": {
-    "installCommand": "npm install",
+    "installCommand": "npm ci",
     "buildCommand": "npm run build",
     "serveCommand": "npm run dev",
     "outputDirectory": "./dist"

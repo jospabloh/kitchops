@@ -1,341 +1,488 @@
-import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
-import { formatCurrency, getWeekKey, extractTicketData } from '@/lib/finance';
-import { Upload, ScanLine, Plus, Check, X, Camera, Loader2 } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { base44 } from "@/api/base44Client";
+import { useAuth } from "@/lib/AuthContext";
+import { usePermissions } from "@/lib/PermissionContext";
+import { fecha, hoy, mensajeDeError, money } from "@/lib/format";
+import PageHeader from "@/components/PageHeader";
+import EmptyState from "@/components/EmptyState";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/use-toast";
+import { cn } from "@/lib/utils";
+import { Check, Loader2, MessageCircle, Pencil, Plus, Receipt, Search, Trash2, X } from "lucide-react";
 
-const CATEGORIAS = ['Insumos', 'Servicios', 'Renta', 'Equipos', 'Mantenimiento', 'Otros'];
-const METODOS = ['Tarjeta de crédito', 'Transferencia', 'Efectivo', 'Otros'];
+const CATEGORIAS = ["Insumos", "Servicios", "Renta", "Equipos", "Mantenimiento", "Otros"];
+const METODOS = ["Tarjeta de crédito", "Transferencia", "Efectivo", "Otros"];
+
+const VACIO = {
+  monto: "",
+  fecha: hoy(),
+  proveedor: "",
+  categoria: "Insumos",
+  metodo_pago: "Efectivo",
+  descripcion: "",
+  facturado: false,
+  pagado: false,
+};
 
 export default function Gastos() {
+  const { user } = useAuth();
+  const { can, writeBlockedReason } = usePermissions();
+  const { toast } = useToast();
+  const [params, setParams] = useSearchParams();
+
   const [gastos, setGastos] = useState([]);
   const [proveedores, setProveedores] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [scanning, setScanning] = useState(false);
-  const [filterProveedor, setFilterProveedor] = useState('');
-  const [filterMes, setFilterMes] = useState('');
+  const [cargando, setCargando] = useState(true);
+  const [busqueda, setBusqueda] = useState("");
+  const [filtroCategoria, setFiltroCategoria] = useState("todas");
+  const [abierto, setAbierto] = useState(false);
+  const [editando, setEditando] = useState(null);
+  const [form, setForm] = useState(VACIO);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState("");
 
-  const emptyForm = {
-    monto: '',
-    fecha: new Date().toISOString().split('T')[0],
-    proveedor: '',
-    categoria: 'Insumos',
-    metodo_pago: 'Tarjeta de crédito',
-    ticket_foto_url: '',
-    descripcion: '',
-    facturado: false,
-    pagado: false,
-  };
-  const [form, setForm] = useState(emptyForm);
+  const puedeCrear = can("Gastos:create");
+  const puedeEditar = can("Gastos:edit");
+  const puedeBorrar = can("Gastos:delete");
+  const puedeFacturado = can("Gastos:mark_facturado");
+  const puedePagado = can("Gastos:mark_pagado");
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const cargar = useCallback(async () => {
+    if (!user?.business_id) return;
+    setCargando(true);
     try {
       const [g, p] = await Promise.all([
-        base44.entities.Gasto.list('-fecha', 200),
-        base44.entities.Proveedor.list('-created_date', 100),
+        base44.entities.Gasto.filter({ business_id: user.business_id }, "-fecha", 1000),
+        base44.entities.Proveedor.filter({ business_id: user.business_id }, "nombre", 300),
       ]);
-      setGastos(g);
-      setProveedores(p);
+      setGastos(g || []);
+      setProveedores(p || []);
     } catch (e) {
       console.error(e);
+      toast({ title: "No pudimos cargar los gastos", variant: "destructive" });
     } finally {
-      setLoading(false);
+      setCargando(false);
     }
-  };
+  }, [user?.business_id, toast]);
 
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setScanning(true);
-    try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      setForm((f) => ({ ...f, ticket_foto_url: file_url }));
+  useEffect(() => { cargar(); }, [cargar]);
 
-      const extracted = await extractTicketData(file_url);
-      setForm((f) => ({
-        ...f,
-        proveedor: extracted.proveedor || f.proveedor,
-        monto: extracted.monto ? String(extracted.monto) : f.monto,
-        fecha: extracted.fecha || f.fecha,
-        descripcion: extracted.descripcion || f.descripcion,
-      }));
-    } catch (e) {
-      console.error('Error scanning ticket:', e);
-    } finally {
-      setScanning(false);
+  // Deep link from the dashboard's "Registrar gasto" button.
+  useEffect(() => {
+    if (params.get("nuevo") === "1" && puedeCrear) {
+      abrirNuevo();
+      params.delete("nuevo");
+      setParams(params, { replace: true });
     }
-  };
+     
+  }, [params, puedeCrear]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const data = {
-      ...form,
-      monto: parseFloat(form.monto) || 0,
-      semana: getWeekKey(form.fecha),
-    };
-    await base44.entities.Gasto.create(data);
-    setForm(emptyForm);
-    setShowForm(false);
-    loadData();
-  };
+  const filtrados = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    return gastos.filter((g) => {
+      if (filtroCategoria !== "todas" && g.categoria !== filtroCategoria) return false;
+      if (!q) return true;
+      return (
+        (g.proveedor || "").toLowerCase().includes(q) ||
+        (g.descripcion || "").toLowerCase().includes(q)
+      );
+    });
+  }, [gastos, busqueda, filtroCategoria]);
 
-  const toggleField = async (gasto, field) => {
-    await base44.entities.Gasto.update(gasto.id, { [field]: !gasto[field] });
-    loadData();
-  };
+  const total = useMemo(
+    () => filtrados.reduce((s, g) => s + Number(g.monto || 0), 0),
+    [filtrados],
+  );
 
-  const deleteGasto = async (id) => {
-    await base44.entities.Gasto.delete(id);
-    loadData();
-  };
-
-  const filteredGastos = gastos.filter((g) => {
-    if (filterProveedor && g.proveedor !== filterProveedor) return false;
-    if (filterMes) {
-      const d = new Date(g.fecha);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (key !== filterMes) return false;
-    }
-    return true;
-  });
-
-  const totalFiltrado = filteredGastos.reduce((s, g) => s + (g.monto || 0), 0);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-orange-500 rounded-full animate-spin"></div>
-      </div>
-    );
+  function abrirNuevo() {
+    setEditando(null);
+    setForm(VACIO);
+    setError("");
+    setAbierto(true);
   }
 
+  function abrirEdicion(g) {
+    setEditando(g);
+    setForm({
+      monto: String(g.monto ?? ""),
+      fecha: g.fecha || hoy(),
+      proveedor: g.proveedor || "",
+      categoria: g.categoria || "Insumos",
+      metodo_pago: g.metodo_pago || "Efectivo",
+      descripcion: g.descripcion || "",
+      facturado: Boolean(g.facturado),
+      pagado: Boolean(g.pagado),
+    });
+    setError("");
+    setAbierto(true);
+  }
+
+  const guardar = async (e) => {
+    e.preventDefault();
+    setError("");
+    setGuardando(true);
+    try {
+      const payload = {
+        business_id: user.business_id,
+        monto: Number(form.monto),
+        fecha: form.fecha,
+        proveedor: form.proveedor.trim(),
+        categoria: form.categoria,
+        metodo_pago: form.metodo_pago,
+        descripcion: form.descripcion.trim(),
+        facturado: form.facturado,
+        pagado: form.pagado,
+      };
+      if (editando) {
+        await base44.functions.invoke("gastos", { action: "updateGastoSafe", id: editando.id, ...payload });
+        toast({ title: "Gasto actualizado" });
+      } else {
+        await base44.functions.invoke("gastos", { action: "createGastoSafe", ...payload });
+        toast({ title: "Gasto registrado" });
+      }
+      setAbierto(false);
+      cargar();
+    } catch (err) {
+      // The server writes a specific, useful sentence for every rejection —
+      // "no tienes permiso", "tu negocio está en solo lectura", "esa fecha no
+      // existe". Showing it beats a generic failure message.
+      setError(mensajeDeError(err, "No pudimos guardar el gasto."));
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const borrar = async (g) => {
+    if (!window.confirm(`¿Eliminar el gasto de ${money(g.monto)} con ${g.proveedor}? No se puede deshacer.`)) return;
+    try {
+      await base44.functions.invoke("gastos", { action: "deleteGastoSafe", id: g.id, business_id: user.business_id });
+      toast({ title: "Gasto eliminado" });
+      cargar();
+    } catch (err) {
+      toast({ title: mensajeDeError(err, "No pudimos eliminarlo"), variant: "destructive" });
+    }
+  };
+
+  const alternar = async (g, campo) => {
+    try {
+      await base44.functions.invoke("gastos", {
+        action: "updateGastoSafe",
+        id: g.id,
+        business_id: user.business_id,
+        [campo]: !g[campo],
+      });
+      cargar();
+    } catch (err) {
+      toast({ title: mensajeDeError(err, "No pudimos actualizarlo"), variant: "destructive" });
+    }
+  };
+
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-heading font-bold text-slate-900">Gastos</h1>
-          <p className="text-slate-500 text-sm mt-1">Total: {formatCurrency(totalFiltrado)}</p>
-        </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Nuevo gasto</span>
-        </button>
-      </div>
+    <div>
+      <PageHeader
+        title="Gastos"
+        description="Todo lo que sale: insumos, servicios, renta, mantenimiento."
+        action={
+          puedeCrear ? (
+            <Button onClick={abrirNuevo}>
+              <Plus className="mr-2 h-4 w-4" />
+              Registrar gasto
+            </Button>
+          ) : null
+        }
+      />
 
-      {/* Form */}
-      {showForm && (
-        <div className="bg-white rounded-xl p-5 border border-slate-200 mb-6">
-          {/* Upload ticket */}
-          <div className="mb-4">
-            <label className="text-sm font-medium text-slate-700 mb-2 block">Foto del ticket (IA extrae los datos)</label>
-            <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-lg p-6 cursor-pointer hover:border-orange-400 hover:bg-orange-50/30 transition-colors">
-              {scanning ? (
-                <div className="flex flex-col items-center gap-2">
-                  <Loader2 className="w-6 h-6 text-orange-500 animate-spin" />
-                  <span className="text-sm text-orange-600 font-medium">Escaneando ticket con IA...</span>
-                </div>
-              ) : form.ticket_foto_url ? (
-                <div className="flex flex-col items-center gap-2">
-                  <Check className="w-6 h-6 text-green-500" />
-                  <span className="text-sm text-green-600 font-medium">Ticket cargado</span>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-2">
-                  <Camera className="w-6 h-6 text-slate-400" />
-                  <span className="text-sm text-slate-500">Toma foto o sube el ticket</span>
-                </div>
-              )}
-              <input type="file" accept="image/*" capture="environment" onChange={handleFileUpload} className="hidden" />
-            </label>
-          </div>
-
-          <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium text-slate-700 mb-1 block">Proveedor</label>
-              <input
-                type="text"
-                value={form.proveedor}
-                onChange={(e) => setForm({ ...form, proveedor: e.target.value })}
-                list="proveedores-list"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                required
-              />
-              <datalist id="proveedores-list">
-                {proveedores.map((p) => (
-                  <option key={p.id} value={p.nombre} />
-                ))}
-              </datalist>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 mb-1 block">Monto</label>
-              <input
-                type="number"
-                step="0.01"
-                value={form.monto}
-                onChange={(e) => setForm({ ...form, monto: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                required
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 mb-1 block">Fecha</label>
-              <input
-                type="date"
-                value={form.fecha}
-                onChange={(e) => setForm({ ...form, fecha: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                required
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 mb-1 block">Categoría</label>
-              <select
-                value={form.categoria}
-                onChange={(e) => setForm({ ...form, categoria: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-              >
-                {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 mb-1 block">Método de pago</label>
-              <select
-                value={form.metodo_pago}
-                onChange={(e) => setForm({ ...form, metodo_pago: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-              >
-                {METODOS.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 mb-1 block">Descripción</label>
-              <input
-                type="text"
-                value={form.descripcion}
-                onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-              />
-            </div>
-            <div className="flex items-center gap-4">
-              <label className="flex items-center gap-2 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={form.facturado}
-                  onChange={(e) => setForm({ ...form, facturado: e.target.checked })}
-                  className="w-4 h-4 rounded"
-                />
-                Facturado
-              </label>
-              <label className="flex items-center gap-2 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={form.pagado}
-                  onChange={(e) => setForm({ ...form, pagado: e.target.checked })}
-                  className="w-4 h-4 rounded"
-                />
-                Pagado
-              </label>
-            </div>
-            <div className="md:col-span-2 flex gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => { setShowForm(false); setForm(emptyForm); }}
-                className="px-4 py-2 text-slate-600 text-sm font-medium hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                className="px-5 py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors"
-              >
-                Guardar gasto
-              </button>
-            </div>
-          </form>
-        </div>
+      {writeBlockedReason && (
+        <p className="mb-5 rounded-md border border-amber/30 bg-amber/10 p-3 text-sm text-amber">
+          {writeBlockedReason}
+        </p>
       )}
 
-      {/* Filters */}
-      <div className="flex gap-3 mb-4">
-        <select
-          value={filterProveedor}
-          onChange={(e) => setFilterProveedor(e.target.value)}
-          className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
-        >
-          <option value="">Todos los proveedores</option>
-          {proveedores.map((p) => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
-        </select>
-        <input
-          type="month"
-          value={filterMes}
-          onChange={(e) => setFilterMes(e.target.value)}
-          className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
-        />
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-dim" aria-hidden="true" />
+          <Input
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar por proveedor o descripción"
+            className="pl-9"
+            aria-label="Buscar gastos"
+          />
+        </div>
+        <Select value={filtroCategoria} onValueChange={setFiltroCategoria}>
+          <SelectTrigger className="sm:w-52" aria-label="Filtrar por categoría">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todas">Todas las categorías</SelectItem>
+            {CATEGORIAS.map((c) => (
+              <SelectItem key={c} value={c}>{c}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* List */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        {filteredGastos.length === 0 ? (
-          <p className="text-sm text-slate-400 text-center py-12">No hay gastos registrados</p>
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {filteredGastos.map((g) => (
-              <div key={g.id} className="flex items-center gap-3 p-4 hover:bg-slate-50 transition-colors">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium text-slate-900 text-sm truncate">{g.proveedor}</p>
-                    {g.ticket_foto_url && (
-                      <ScanLine className="w-3.5 h-3.5 text-orange-400 flex-shrink-0" />
+      {cargando ? (
+        <div className="space-y-2">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-16 animate-pulse rounded-lg border border-border bg-card" />
+          ))}
+        </div>
+      ) : filtrados.length === 0 ? (
+        <EmptyState
+          icon={Receipt}
+          title={gastos.length === 0 ? "Todavía no hay gastos" : "Ningún gasto coincide"}
+          body={
+            gastos.length === 0
+              ? "Registra el primero y empieza a ver a dónde se va el dinero de la semana. También puedes mandarle la foto del ticket al asistente de WhatsApp."
+              : "Prueba con otra búsqueda o quita el filtro de categoría."
+          }
+          actionLabel={gastos.length === 0 && puedeCrear ? "Registrar gasto" : undefined}
+          onAction={gastos.length === 0 && puedeCrear ? abrirNuevo : undefined}
+        />
+      ) : (
+        <>
+          <div className="mb-3 flex items-baseline justify-between">
+            <p className="eyebrow">
+              {filtrados.length} {filtrados.length === 1 ? "gasto" : "gastos"}
+            </p>
+            {can("Dashboard:financials") && (
+              <p className="text-sm text-slate">
+                Suman <span className="money font-semibold text-chalk">{money(total)}</span>
+              </p>
+            )}
+          </div>
+
+          <div className="overflow-hidden rounded-lg border border-border bg-card">
+            <ul className="divide-y divide-border">
+              {filtrados.map((g) => (
+                <li key={g.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate font-medium text-chalk">{g.proveedor}</p>
+                      {g.origen === "whatsapp" && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-sm bg-navy/50 px-1.5 py-0.5 font-mono text-[0.625rem] uppercase tracking-wide text-slate"
+                          title="Se registró desde WhatsApp"
+                        >
+                          <MessageCircle className="h-2.5 w-2.5" aria-hidden="true" />
+                          WA
+                        </span>
+                      )}
+                    </div>
+                    <p className="truncate font-mono text-[0.6875rem] text-slate-dim">
+                      {fecha(g.fecha)} · {g.categoria} · {g.metodo_pago}
+                      {g.descripcion ? ` · ${g.descripcion}` : ""}
+                    </p>
+                  </div>
+
+                  {/* Two facts about a card expense that people chase weekly.
+                      Rendered as toggles rather than badges because chasing
+                      them IS the task. */}
+                  {g.metodo_pago === "Tarjeta de crédito" && (
+                    <div className="flex shrink-0 gap-1.5">
+                      <EstadoToggle
+                        activo={g.facturado}
+                        onSi="Facturado"
+                        onNo="Sin factura"
+                        disabled={!puedeFacturado}
+                        onClick={() => alternar(g, "facturado")}
+                      />
+                      <EstadoToggle
+                        activo={g.pagado}
+                        onSi="Pagado"
+                        onNo="Sin pagar"
+                        disabled={!puedePagado}
+                        onClick={() => alternar(g, "pagado")}
+                      />
+                    </div>
+                  )}
+
+                  <span className="money w-24 shrink-0 text-right text-sm font-semibold text-chalk">
+                    {money(g.monto)}
+                  </span>
+
+                  <div className="flex shrink-0 gap-1">
+                    {puedeEditar && (
+                      <button
+                        type="button"
+                        onClick={() => abrirEdicion(g)}
+                        aria-label={`Editar gasto de ${g.proveedor}`}
+                        className="rounded-sm p-1.5 text-slate-dim transition-colors hover:bg-steel-high hover:text-chalk"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {puedeBorrar && (
+                      <button
+                        type="button"
+                        onClick={() => borrar(g)}
+                        aria-label={`Eliminar gasto de ${g.proveedor}`}
+                        className="rounded-sm p-1.5 text-slate-dim transition-colors hover:bg-rojo/15 hover:text-rojo"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     )}
                   </div>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    {new Date(g.fecha).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    {' · '}
-                    {g.categoria}
-                    {' · '}
-                    {g.metodo_pago}
-                    {g.descripcion ? ` · ${g.descripcion}` : ''}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold text-slate-900 text-sm">{formatCurrency(g.monto)}</p>
-                  <div className="flex items-center gap-1.5 mt-1 justify-end">
-                    <button
-                      onClick={() => toggleField(g, 'facturado')}
-                      className={`text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors ${
-                        g.facturado ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'
-                      }`}
-                    >
-                      Fact
-                    </button>
-                    <button
-                      onClick={() => toggleField(g, 'pagado')}
-                      className={`text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors ${
-                        g.pagado ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
-                      }`}
-                    >
-                      Pag
-                    </button>
-                    <button
-                      onClick={() => deleteGasto(g.id)}
-                      className="text-slate-300 hover:text-red-500 transition-colors"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
+                </li>
+              ))}
+            </ul>
           </div>
-        )}
-      </div>
+        </>
+      )}
+
+      <Dialog open={abierto} onOpenChange={setAbierto}>
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-display text-2xl uppercase tracking-tight">
+              {editando ? "Editar gasto" : "Registrar gasto"}
+            </DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={guardar} className="space-y-4">
+            {error && (
+              <p role="alert" className="rounded-md border border-rojo/30 bg-rojo/10 p-3 text-sm text-rojo">
+                {error}
+              </p>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="monto">Monto</Label>
+                <Input
+                  id="monto"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0.01"
+                  autoFocus
+                  value={form.monto}
+                  onChange={(e) => setForm({ ...form, monto: e.target.value })}
+                  placeholder="850"
+                  className="font-mono"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fecha">Fecha</Label>
+                <Input
+                  id="fecha"
+                  type="date"
+                  value={form.fecha}
+                  onChange={(e) => setForm({ ...form, fecha: e.target.value })}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="proveedor">Proveedor</Label>
+              <Input
+                id="proveedor"
+                list="proveedores-conocidos"
+                value={form.proveedor}
+                onChange={(e) => setForm({ ...form, proveedor: e.target.value })}
+                placeholder="La Central"
+                required
+              />
+              {/* Suggests the suppliers already on file without forcing the
+                  choice — a one-off purchase shouldn't require adding a
+                  supplier to the catalogue first. */}
+              <datalist id="proveedores-conocidos">
+                {proveedores.map((p) => <option key={p.id} value={p.nombre} />)}
+              </datalist>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Categoría</Label>
+                <Select value={form.categoria} onValueChange={(v) => setForm({ ...form, categoria: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIAS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Cómo se pagó</Label>
+                <Select value={form.metodo_pago} onValueChange={(v) => setForm({ ...form, metodo_pago: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {METODOS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="descripcion">Qué se compró</Label>
+              <Textarea
+                id="descripcion"
+                rows={2}
+                value={form.descripcion}
+                onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
+                placeholder="Verdura de la semana"
+              />
+            </div>
+
+            {form.metodo_pago === "Tarjeta de crédito" && (
+              <div className="flex flex-wrap gap-2 rounded-md border border-border bg-steel-high/40 p-3">
+                <EstadoToggle
+                  activo={form.facturado}
+                  onSi="Facturado"
+                  onNo="Sin factura"
+                  disabled={!puedeFacturado}
+                  onClick={() => setForm({ ...form, facturado: !form.facturado })}
+                />
+                <EstadoToggle
+                  activo={form.pagado}
+                  onSi="Pagado"
+                  onNo="Sin pagar"
+                  disabled={!puedePagado}
+                  onClick={() => setForm({ ...form, pagado: !form.pagado })}
+                />
+              </div>
+            )}
+
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" onClick={() => setAbierto(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={guardando}>
+                {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {editando ? "Guardar cambios" : "Registrar"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+function EstadoToggle({ activo, onSi, onNo, disabled, onClick }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      aria-pressed={activo}
+      className={cn(
+        "inline-flex items-center gap-1 rounded-sm border px-2 py-1 text-[0.6875rem] font-medium transition-colors",
+        activo
+          ? "border-verde/40 bg-verde/15 text-verde"
+          : "border-border bg-transparent text-slate-dim",
+        disabled ? "cursor-not-allowed opacity-60" : "hover:border-copper/50",
+      )}
+    >
+      {activo ? <Check className="h-3 w-3" aria-hidden="true" /> : <X className="h-3 w-3" aria-hidden="true" />}
+      {activo ? onSi : onNo}
+    </button>
   );
 }

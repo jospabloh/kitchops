@@ -1,177 +1,204 @@
-import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
-import { Bell, Check, AlertTriangle, X } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { base44 } from "@/api/base44Client";
+import { useAuth } from "@/lib/AuthContext";
+import { usePermissions } from "@/lib/PermissionContext";
+import { mensajeDeError } from "@/lib/format";
+import PageHeader from "@/components/PageHeader";
+import EmptyState from "@/components/EmptyState";
+import { Rail, Ticket } from "@/components/Ticket";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/use-toast";
+import { cn } from "@/lib/utils";
+import { CheckCheck, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
 
-const SEVERITY_CONFIG = {
-  rojo: { bg: 'bg-red-50', border: 'border-red-200', dot: 'bg-red-500', text: 'text-red-700' },
-  amarillo: { bg: 'bg-amber-50', border: 'border-amber-200', dot: 'bg-amber-400', text: 'text-amber-700' },
-  verde: { bg: 'bg-green-50', border: 'border-green-200', dot: 'bg-green-500', text: 'text-green-700' },
-};
+const FILTROS = [
+  { id: "abiertas", label: "Por revisar" },
+  { id: "todas", label: "Todas" },
+];
 
-const TIPO_LABELS = {
-  gasto_alto: 'Gasto alto',
-  deposito_faltante: 'Depósito faltante',
-  stock_bajo: 'Stock bajo',
-  ticket_pendiente: 'Ticket pendiente',
-  pago_pendiente: 'Pago pendiente',
-};
-
+// The rail, at full size. Same component the dashboard shows three of.
+//
+// Alerts here are open items you clear, not a log you scroll — which is why
+// there is no "leídas" tab by default and why clearing one animates it off the
+// rail. The archive is one click away for anyone who needs to check what was
+// dismissed, but it isn't the default view, because a list that only grows is
+// a list people stop opening.
 export default function Alertas() {
+  const { user } = useAuth();
+  const { can } = usePermissions();
+  const { toast } = useToast();
+
   const [alertas, setAlertas] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('todas');
+  const [cargando, setCargando] = useState(true);
+  const [filtro, setFiltro] = useState("abiertas");
+  const [saliendo, setSaliendo] = useState({});
+  const [recalculando, setRecalculando] = useState(false);
+  const [limpiando, setLimpiando] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const puedeLeer = can("Alertas:mark_read");
+  const puedeGenerar = can("Alertas:generate");
 
-  const loadData = async () => {
+  const cargar = useCallback(async () => {
+    if (!user?.business_id) return;
+    setCargando(true);
     try {
-      const data = await base44.entities.Alerta.list('-created_date', 200);
-      setAlertas(data);
+      const rows = await base44.entities.Alerta.filter({ business_id: user.business_id }, "-fecha", 300);
+      setAlertas(rows || []);
     } catch (e) {
       console.error(e);
+      toast({ title: "No pudimos cargar las alertas", variant: "destructive" });
     } finally {
-      setLoading(false);
+      setCargando(false);
+    }
+  }, [user?.business_id, toast]);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const visibles = useMemo(() => {
+    const orden = { rojo: 0, amarillo: 1, verde: 2 };
+    const base = filtro === "abiertas" ? alertas.filter((a) => !a.leida) : alertas;
+    return [...base].sort((a, b) => {
+      // Unread first, then by severity, then newest — so the thing to deal with
+      // is always top-left.
+      if (Boolean(a.leida) !== Boolean(b.leida)) return a.leida ? 1 : -1;
+      const s = (orden[a.severidad] ?? 3) - (orden[b.severidad] ?? 3);
+      if (s !== 0) return s;
+      return String(b.fecha || "").localeCompare(String(a.fecha || ""));
+    });
+  }, [alertas, filtro]);
+
+  const abiertas = useMemo(() => alertas.filter((a) => !a.leida), [alertas]);
+
+  const marcar = async (alerta) => {
+    setSaliendo((s) => ({ ...s, [alerta.id]: true }));
+    try {
+      await base44.functions.invoke("alertas", { action: "markReadSafe", ids: [alerta.id] });
+      setTimeout(() => {
+        setAlertas((list) => list.map((a) => (a.id === alerta.id ? { ...a, leida: true } : a)));
+        setSaliendo((s) => {
+          const next = { ...s };
+          delete next[alerta.id];
+          return next;
+        });
+      }, 260);
+    } catch (err) {
+      toast({ title: mensajeDeError(err, "No pudimos marcarla"), variant: "destructive" });
+      setSaliendo((s) => {
+        const next = { ...s };
+        delete next[alerta.id];
+        return next;
+      });
     }
   };
 
-  const markRead = async (id) => {
-    await base44.entities.Alerta.update(id, { leida: true });
-    loadData();
+  const marcarTodas = async () => {
+    setLimpiando(true);
+    try {
+      const r = await base44.functions.invoke("alertas", { action: "markReadSafe", all: true });
+      toast({ title: `${r?.data?.marcadas ?? 0} alertas archivadas` });
+      cargar();
+    } catch (err) {
+      toast({ title: mensajeDeError(err, "No pudimos archivarlas"), variant: "destructive" });
+    } finally {
+      setLimpiando(false);
+    }
   };
 
-  const deleteAlerta = async (id) => {
-    await base44.entities.Alerta.delete(id);
-    loadData();
+  const recalcular = async () => {
+    setRecalculando(true);
+    try {
+      const r = await base44.functions.invoke("alertas", { action: "generarAlertasSafe" });
+      const creadas = r?.data?.alertas_creadas ?? 0;
+      toast({
+        title: creadas === 0 ? "Nada nuevo" : `${creadas} ${creadas === 1 ? "alerta nueva" : "alertas nuevas"}`,
+        description: creadas === 0 ? "Revisamos todo y no encontramos nada que no supieras ya." : undefined,
+      });
+      cargar();
+    } catch (err) {
+      toast({ title: mensajeDeError(err, "No pudimos recalcular"), variant: "destructive" });
+    } finally {
+      setRecalculando(false);
+    }
   };
-
-  const filtered = alertas.filter((a) => {
-    if (filter === 'todas') return true;
-    if (filter === 'no_leidas') return !a.leida;
-    return a.severidad === filter;
-  });
-
-  const counts = {
-    rojo: alertas.filter((a) => a.severidad === 'rojo' && !a.leida).length,
-    amarillo: alertas.filter((a) => a.severidad === 'amarillo' && !a.leida).length,
-    verde: alertas.filter((a) => a.severidad === 'verde' && !a.leida).length,
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-orange-500 rounded-full animate-spin"></div>
-      </div>
-    );
-  }
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-heading font-bold text-slate-900">Alertas</h1>
-        <p className="text-slate-500 text-sm mt-1">Monitoreo de gastos y anomalías</p>
-      </div>
+    <div>
+      <PageHeader
+        title="Alertas"
+        description="Gastos que se dispararon, depósitos que no llegaron, insumos por acabarse."
+        action={
+          <div className="flex gap-2">
+            {puedeGenerar && (
+              <Button variant="outline" onClick={recalcular} disabled={recalculando}>
+                <RefreshCw className={cn("mr-2 h-4 w-4", recalculando && "animate-spin")} />
+                Recalcular
+              </Button>
+            )}
+            {puedeLeer && abiertas.length > 0 && (
+              <Button variant="outline" onClick={marcarTodas} disabled={limpiando}>
+                {limpiando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCheck className="mr-2 h-4 w-4" />}
+                Archivar todas
+              </Button>
+            )}
+          </div>
+        }
+      />
 
-      {/* Semaphore summary */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        <div
-          onClick={() => setFilter('rojo')}
-          className={`bg-white rounded-xl p-4 border cursor-pointer transition-all ${filter === 'rojo' ? 'border-red-400 ring-2 ring-red-100' : 'border-slate-200'}`}
-        >
-          <div className="flex items-center gap-2 mb-1">
-            <span className="w-3 h-3 rounded-full bg-red-500"></span>
-            <span className="text-xs font-medium text-slate-500">Rojas</span>
-          </div>
-          <p className="text-2xl font-bold text-red-600">{counts.rojo}</p>
-        </div>
-        <div
-          onClick={() => setFilter('amarillo')}
-          className={`bg-white rounded-xl p-4 border cursor-pointer transition-all ${filter === 'amarillo' ? 'border-amber-400 ring-2 ring-amber-100' : 'border-slate-200'}`}
-        >
-          <div className="flex items-center gap-2 mb-1">
-            <span className="w-3 h-3 rounded-full bg-amber-400"></span>
-            <span className="text-xs font-medium text-slate-500">Amarillas</span>
-          </div>
-          <p className="text-2xl font-bold text-amber-600">{counts.amarillo}</p>
-        </div>
-        <div
-          onClick={() => setFilter('verde')}
-          className={`bg-white rounded-xl p-4 border cursor-pointer transition-all ${filter === 'verde' ? 'border-green-400 ring-2 ring-green-100' : 'border-slate-200'}`}
-        >
-          <div className="flex items-center gap-2 mb-1">
-            <span className="w-3 h-3 rounded-full bg-green-500"></span>
-            <span className="text-xs font-medium text-slate-500">Verdes</span>
-          </div>
-          <p className="text-2xl font-bold text-green-600">{counts.verde}</p>
-        </div>
-      </div>
-
-      {/* Filter tabs */}
-      <div className="flex gap-2 mb-4">
-        {['todas', 'no_leidas', 'rojo', 'amarillo', 'verde'].map((f) => (
+      <div className="mb-6 flex gap-1 rounded-md border border-border bg-card p-1">
+        {FILTROS.map((f) => (
           <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              filter === f ? 'bg-slate-900 text-white' : 'bg-white text-slate-500 border border-slate-200'
-            }`}
+            key={f.id}
+            type="button"
+            onClick={() => setFiltro(f.id)}
+            aria-pressed={filtro === f.id}
+            className={cn(
+              "flex-1 rounded-sm px-3 py-1.5 text-sm font-medium transition-colors",
+              filtro === f.id ? "bg-steel-high text-chalk" : "text-slate hover:text-chalk",
+            )}
           >
-            {f === 'todas' ? 'Todas' : f === 'no_leidas' ? 'No leídas' : f === 'rojo' ? 'Rojas' : f === 'amarillo' ? 'Amarillas' : 'Verdes'}
+            {f.label}
+            {f.id === "abiertas" && abiertas.length > 0 && (
+              <span className="ml-2 font-mono text-[0.6875rem] text-copper">{abiertas.length}</span>
+            )}
           </button>
         ))}
       </div>
 
-      {/* List */}
-      <div className="space-y-2">
-        {filtered.length === 0 ? (
-          <div className="text-center py-12">
-            <Bell className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm text-slate-400">No hay alertas</p>
+      {cargando ? (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2].map((i) => <div key={i} className="h-40 animate-pulse rounded-lg border border-border bg-card" />)}
+        </div>
+      ) : visibles.length === 0 ? (
+        filtro === "abiertas" ? (
+          <div className="flex flex-col items-center rounded-lg border border-verde/25 bg-verde/10 px-6 py-14 text-center">
+            <CheckCircle2 className="mb-3 h-8 w-8 text-verde" aria-hidden="true" />
+            <h3 className="font-display text-lg font-semibold text-chalk">Todo en orden</h3>
+            <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-slate">
+              Ningún depósito faltante, ningún insumo bajo el mínimo, ningún gasto disparado.
+            </p>
           </div>
         ) : (
-          filtered.map((a) => {
-            const cfg = SEVERITY_CONFIG[a.severidad] || SEVERITY_CONFIG.amarillo;
-            return (
-              <div
-                key={a.id}
-                className={`flex items-start gap-3 p-4 rounded-xl border ${cfg.bg} ${cfg.border} ${a.leida ? 'opacity-50' : ''}`}
-              >
-                <span className={`w-2.5 h-2.5 rounded-full ${cfg.dot} mt-1.5 flex-shrink-0`}></span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-slate-800">{a.titulo}</p>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${cfg.bg} ${cfg.text}`}>
-                      {TIPO_LABELS[a.tipo] || a.tipo}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">{a.mensaje}</p>
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    {new Date(a.fecha || a.created_date).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' })}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1">
-                  {!a.leida && (
-                    <button
-                      onClick={() => markRead(a.id)}
-                      className="text-slate-400 hover:text-green-500 transition-colors p-1"
-                      title="Marcar como leída"
-                    >
-                      <Check className="w-4 h-4" />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => deleteAlerta(a.id)}
-                    className="text-slate-300 hover:text-red-500 transition-colors p-1"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
+          <EmptyState
+            icon={CheckCircle2}
+            title="Sin alertas"
+            body="KitchOps revisa tus gastos, cortes e inventario cada noche. Cuando algo se salga de lo normal, aparece aquí."
+          />
+        )
+      ) : (
+        <Rail>
+          {visibles.map((a, i) => (
+            <div key={a.id} className={cn(a.leida && "opacity-55")}>
+              <Ticket
+                alerta={a}
+                index={i}
+                saliendo={Boolean(saliendo[a.id])}
+                puedeLeer={puedeLeer && !a.leida}
+                onLeer={marcar}
+              />
+            </div>
+          ))}
+        </Rail>
+      )}
     </div>
   );
 }

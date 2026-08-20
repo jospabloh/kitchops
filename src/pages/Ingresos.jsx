@@ -1,286 +1,396 @@
-import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
-import { formatCurrency, getWeekKey } from '@/lib/finance';
-import { Plus, Check, X, AlertCircle, Truck } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { base44 } from "@/api/base44Client";
+import { useAuth } from "@/lib/AuthContext";
+import { usePermissions } from "@/lib/PermissionContext";
+import { fecha, mensajeDeError, money, moneySigned, semanaDe, semanaLegible } from "@/lib/format";
+import PageHeader from "@/components/PageHeader";
+import EmptyState from "@/components/EmptyState";
+import StatCard from "@/components/StatCard";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/use-toast";
+import { AlertTriangle, Loader2, Plus, Trash2, Wallet } from "lucide-react";
 
-const PLATAFORMAS = ['Rappi', 'Uber Eats', 'Didi Food', 'Otros'];
+const PLATAFORMAS = ["Rappi", "Uber Eats", "Didi Food", "Otros"];
 
+// Reconciling the weekly platform cut is the highest-value thing this app does:
+// it is where a restaurant finds out a platform paid less than it reported.
+// So the screen is built around the difference, not around the list — the cut
+// is drawn as the paper artifact it is (reported / perforation / deposited /
+// total), because the shape teaches which number is which.
 export default function Ingresos() {
-  const [ingresos, setIngresos] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [filterPlataforma, setFilterPlataforma] = useState('');
+  const { user } = useAuth();
+  const { can, writeBlockedReason } = usePermissions();
+  const { toast } = useToast();
 
-  const emptyForm = {
-    plataforma: 'Rappi',
-    semana: getWeekKey(new Date().toISOString()),
-    fecha_inicio: '',
-    fecha_fin: '',
-    monto_corte: '',
-    monto_depositado: '',
-    fecha_deposito: '',
-    notas: '',
-  };
-  const [form, setForm] = useState(emptyForm);
+  const [cortes, setCortes] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [abierto, setAbierto] = useState(false);
+  const [editando, setEditando] = useState(null);
+  const [form, setForm] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const puedeCrear = can("Ingresos:create");
+  const puedeConciliar = can("Ingresos:conciliar");
+  const puedeBorrar = can("Ingresos:delete");
+  const verFinanzas = can("Dashboard:financials");
 
-  const loadData = async () => {
+  const cargar = useCallback(async () => {
+    if (!user?.business_id) return;
+    setCargando(true);
     try {
-      const data = await base44.entities.IngresoPlataforma.list('-created_date', 200);
-      setIngresos(data);
+      const rows = await base44.entities.IngresoPlataforma.filter(
+        { business_id: user.business_id }, "-semana", 500,
+      );
+      setCortes(rows || []);
     } catch (e) {
       console.error(e);
+      toast({ title: "No pudimos cargar los cortes", variant: "destructive" });
     } finally {
-      setLoading(false);
+      setCargando(false);
+    }
+  }, [user?.business_id, toast]);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const resumen = useMemo(() => {
+    const pendientes = cortes.filter(
+      (c) => c.monto_depositado === null || c.monto_depositado === undefined || c.monto_depositado === "",
+    );
+    const cortos = cortes.filter((c) => Number(c.diferencia ?? 0) < -1);
+    const faltante = cortos.reduce((s, c) => s + Math.abs(Number(c.diferencia || 0)), 0);
+    const cobrado = cortes.reduce((s, c) => s + Number(c.monto_depositado || 0), 0);
+    return { pendientes, cortos, faltante, cobrado };
+  }, [cortes]);
+
+  function abrirNuevo() {
+    setEditando(null);
+    setForm({
+      plataforma: "Rappi",
+      semana: semanaDe(),
+      monto_corte: "",
+      monto_depositado: "",
+      fecha_deposito: "",
+      notas: "",
+    });
+    setError("");
+    setAbierto(true);
+  }
+
+  function abrirEdicion(c) {
+    setEditando(c);
+    setForm({
+      plataforma: c.plataforma,
+      semana: c.semana,
+      monto_corte: String(c.monto_corte ?? ""),
+      monto_depositado: c.monto_depositado === null || c.monto_depositado === undefined ? "" : String(c.monto_depositado),
+      fecha_deposito: c.fecha_deposito || "",
+      notas: c.notas || "",
+    });
+    setError("");
+    setAbierto(true);
+  }
+
+  const guardar = async (e) => {
+    e.preventDefault();
+    setError("");
+    setGuardando(true);
+    try {
+      const payload = {
+        business_id: user.business_id,
+        plataforma: form.plataforma,
+        semana: form.semana,
+        monto_corte: Number(form.monto_corte),
+        // "" means "not deposited yet", which is different from zero — sending
+        // 0 would render as "cuadra" against a cut nobody has been paid for.
+        monto_depositado: form.monto_depositado === "" ? null : Number(form.monto_depositado),
+        fecha_deposito: form.fecha_deposito || null,
+        notas: form.notas,
+      };
+      if (editando) {
+        await base44.functions.invoke("ingresos", { action: "updateIngresoSafe", id: editando.id, ...payload });
+        toast({ title: "Corte actualizado" });
+      } else {
+        await base44.functions.invoke("ingresos", { action: "createIngresoSafe", ...payload });
+        toast({ title: "Corte registrado" });
+      }
+      setAbierto(false);
+      cargar();
+    } catch (err) {
+      setError(mensajeDeError(err, "No pudimos guardar el corte."));
+    } finally {
+      setGuardando(false);
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const corte = parseFloat(form.monto_corte) || 0;
-    const depositado = parseFloat(form.monto_depositado) || 0;
-    const data = {
-      ...form,
-      monto_corte: corte,
-      monto_depositado: depositado,
-      diferencia: depositado - corte,
-      conciliado: Math.abs(depositado - corte) < 1,
-    };
-    await base44.entities.IngresoPlataforma.create(data);
-    setForm(emptyForm);
-    setShowForm(false);
-    loadData();
+  const borrar = async (c) => {
+    if (!window.confirm(`¿Eliminar el corte de ${c.plataforma} de la ${semanaLegible(c.semana).toLowerCase()}?`)) return;
+    try {
+      await base44.functions.invoke("ingresos", { action: "deleteIngresoSafe", id: c.id, business_id: user.business_id });
+      toast({ title: "Corte eliminado" });
+      cargar();
+    } catch (err) {
+      toast({ title: mensajeDeError(err, "No pudimos eliminarlo"), variant: "destructive" });
+    }
   };
-
-  const deleteIngreso = async (id) => {
-    await base44.entities.IngresoPlataforma.delete(id);
-    loadData();
-  };
-
-  const filtered = ingresos.filter((i) => !filterPlataforma || i.plataforma === filterPlataforma);
-
-  // Summary
-  const totalCorte = filtered.reduce((s, i) => s + (i.monto_corte || 0), 0);
-  const totalDepositado = filtered.reduce((s, i) => s + (i.monto_depositado || 0), 0);
-  const totalDiferencia = totalDepositado - totalCorte;
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-orange-500 rounded-full animate-spin"></div>
-      </div>
-    );
-  }
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-heading font-bold text-slate-900">Ingresos</h1>
-          <p className="text-slate-500 text-sm mt-1">Conciliación Rappi / Uber / Didi</p>
-        </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Nuevo corte</span>
-        </button>
-      </div>
+    <div>
+      <PageHeader
+        title="Cortes"
+        description="Lo que te reportan Rappi, Uber Eats y Didi — contra lo que de verdad te depositan."
+        action={puedeCrear ? <Button onClick={abrirNuevo}><Plus className="mr-2 h-4 w-4" />Registrar corte</Button> : null}
+      />
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        <div className="bg-white rounded-xl p-4 border border-slate-200">
-          <p className="text-[10px] text-slate-400 uppercase font-medium mb-1">Corte reportado</p>
-          <p className="text-lg font-bold text-slate-900">{formatCurrency(totalCorte)}</p>
-        </div>
-        <div className="bg-white rounded-xl p-4 border border-slate-200">
-          <p className="text-[10px] text-slate-400 uppercase font-medium mb-1">Depositado</p>
-          <p className="text-lg font-bold text-slate-900">{formatCurrency(totalDepositado)}</p>
-        </div>
-        <div className={`bg-white rounded-xl p-4 border ${totalDiferencia < 0 ? 'border-red-300' : 'border-slate-200'}`}>
-          <p className="text-[10px] text-slate-400 uppercase font-medium mb-1">Diferencia</p>
-          <p className={`text-lg font-bold ${totalDiferencia < 0 ? 'text-red-600' : 'text-green-600'}`}>
-            {formatCurrency(totalDiferencia)}
-          </p>
-        </div>
-      </div>
+      {writeBlockedReason && (
+        <p className="mb-5 rounded-md border border-amber/30 bg-amber/10 p-3 text-sm text-amber">{writeBlockedReason}</p>
+      )}
 
-      {/* Form */}
-      {showForm && (
-        <div className="bg-white rounded-xl p-5 border border-slate-200 mb-6">
-          <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium text-slate-700 mb-1 block">Plataforma</label>
-              <select
-                value={form.plataforma}
-                onChange={(e) => setForm({ ...form, plataforma: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+      {!cargando && cortes.length > 0 && (
+        <section className="mb-7 grid gap-4 sm:grid-cols-3">
+          <StatCard
+            label="Depositado en total"
+            value={money(resumen.cobrado)}
+            sublabel={`${cortes.length} ${cortes.length === 1 ? "corte" : "cortes"} registrados`}
+            icon={Wallet}
+            tone="copper"
+            sensitive={!verFinanzas}
+          />
+          <StatCard
+            label="Sin depósito"
+            value={String(resumen.pendientes.length)}
+            sublabel={resumen.pendientes.length === 0 ? "Todo conciliado" : "Cortes esperando el depósito"}
+            icon={AlertTriangle}
+            tone={resumen.pendientes.length > 0 ? "warning" : "positive"}
+          />
+          <StatCard
+            label="Te quedaron a deber"
+            value={money(resumen.faltante)}
+            sublabel={
+              resumen.cortos.length === 0
+                ? "Ningún corte salió corto"
+                : `En ${resumen.cortos.length} ${resumen.cortos.length === 1 ? "corte" : "cortes"}`
+            }
+            icon={AlertTriangle}
+            tone={resumen.faltante > 0 ? "negative" : "positive"}
+            sensitive={!verFinanzas}
+          />
+        </section>
+      )}
+
+      {cargando ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2].map((i) => <div key={i} className="h-48 animate-pulse rounded-lg border border-border bg-card" />)}
+        </div>
+      ) : cortes.length === 0 ? (
+        <EmptyState
+          icon={Wallet}
+          title="Todavía no registras cortes"
+          body="Cada semana, captura lo que te reportó la plataforma y lo que te depositó el banco. Ahí es donde se ve si te pagaron completo."
+          actionLabel={puedeCrear ? "Registrar el primer corte" : undefined}
+          onAction={puedeCrear ? abrirNuevo : undefined}
+        />
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {cortes.map((c) => {
+            const pendiente = c.monto_depositado === null || c.monto_depositado === undefined || c.monto_depositado === "";
+            const dif = Number(c.diferencia ?? 0);
+            const corto = dif < -0.01;
+            return (
+              <article
+                key={c.id}
+                className={`rounded-lg border bg-card p-4 transition-colors ${
+                  corto ? "border-rojo/35" : pendiente ? "border-amber/30" : "border-border"
+                }`}
               >
-                {PLATAFORMAS.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 mb-1 block">Semana</label>
-              <input
-                type="text"
-                value={form.semana}
-                onChange={(e) => setForm({ ...form, semana: e.target.value })}
-                placeholder="2026-34"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 mb-1 block">Fecha inicio corte</label>
-              <input
-                type="date"
-                value={form.fecha_inicio}
-                onChange={(e) => setForm({ ...form, fecha_inicio: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 mb-1 block">Fecha fin corte</label>
-              <input
-                type="date"
-                value={form.fecha_fin}
-                onChange={(e) => setForm({ ...form, fecha_fin: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 mb-1 block">Monto del corte (lo que dice la app)</label>
-              <input
-                type="number"
-                step="0.01"
-                value={form.monto_corte}
-                onChange={(e) => setForm({ ...form, monto_corte: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                required
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 mb-1 block">Monto depositado (real)</label>
-              <input
-                type="number"
-                step="0.01"
-                value={form.monto_depositado}
-                onChange={(e) => setForm({ ...form, monto_depositado: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 mb-1 block">Fecha de depósito</label>
-              <input
-                type="date"
-                value={form.fecha_deposito}
-                onChange={(e) => setForm({ ...form, fecha_deposito: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 mb-1 block">Notas</label>
-              <input
-                type="text"
-                value={form.notas}
-                onChange={(e) => setForm({ ...form, notas: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-              />
-            </div>
-            <div className="md:col-span-2 flex gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => { setShowForm(false); setForm(emptyForm); }}
-                className="px-4 py-2 text-slate-600 text-sm font-medium hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                className="px-5 py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors"
-              >
-                Guardar corte
-              </button>
-            </div>
-          </form>
+                <div className="flex items-baseline justify-between gap-2">
+                  <h3 className="font-display text-lg font-semibold text-chalk">{c.plataforma}</h3>
+                  <span className="font-mono text-[0.6875rem] text-slate-dim">{semanaLegible(c.semana)}</span>
+                </div>
+
+                <div className="mt-3 flex items-baseline justify-between">
+                  <span className="text-xs text-slate">Te reportaron</span>
+                  <span className="money text-sm text-chalk">{money(c.monto_corte)}</span>
+                </div>
+
+                <div className="cut-line" />
+
+                <div className="flex items-baseline justify-between">
+                  <span className="text-xs text-slate">Te depositaron</span>
+                  <span className={`money text-sm ${pendiente ? "text-slate-dim" : "text-chalk"}`}>
+                    {pendiente ? "pendiente" : money(c.monto_depositado)}
+                  </span>
+                </div>
+
+                {c.fecha_deposito && (
+                  <p className="mt-1 text-right font-mono text-[0.625rem] text-slate-dim">{fecha(c.fecha_deposito)}</p>
+                )}
+
+                <div className="mt-3 flex items-baseline justify-between border-t border-border pt-3">
+                  <span className="eyebrow">Diferencia</span>
+                  {pendiente ? (
+                    <span className="text-sm text-amber">falta el depósito</span>
+                  ) : (
+                    <span className={`money text-lg font-semibold ${corto ? "text-rojo" : dif > 0.01 ? "text-amber" : "text-verde"}`}>
+                      {Math.abs(dif) < 0.01 ? "cuadra" : moneySigned(dif)}
+                    </span>
+                  )}
+                </div>
+
+                {c.notas && <p className="mt-2.5 text-xs leading-relaxed text-slate">{c.notas}</p>}
+
+                {(puedeConciliar || puedeBorrar) && (
+                  <div className="mt-3 flex gap-2 border-t border-border pt-3">
+                    {puedeConciliar && (
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => abrirEdicion(c)}>
+                        {pendiente ? "Registrar depósito" : "Editar"}
+                      </Button>
+                    )}
+                    {puedeBorrar && (
+                      <button
+                        type="button"
+                        onClick={() => borrar(c)}
+                        aria-label={`Eliminar el corte de ${c.plataforma}`}
+                        className="rounded-sm p-2 text-slate-dim transition-colors hover:bg-rojo/15 hover:text-rojo"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </article>
+            );
+          })}
         </div>
       )}
 
-      {/* Filter */}
-      <div className="mb-4">
-        <select
-          value={filterPlataforma}
-          onChange={(e) => setFilterPlataforma(e.target.value)}
-          className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
-        >
-          <option value="">Todas las plataformas</option>
-          {PLATAFORMAS.map((p) => <option key={p} value={p}>{p}</option>)}
-        </select>
-      </div>
+      <Dialog open={abierto} onOpenChange={setAbierto}>
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-display text-2xl uppercase tracking-tight">
+              {editando ? "Editar corte" : "Registrar corte"}
+            </DialogTitle>
+          </DialogHeader>
 
-      {/* List */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        {filtered.length === 0 ? (
-          <div className="text-center py-12">
-            <Truck className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm text-slate-400">No hay cortes registrados</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {filtered.map((i) => {
-              const diff = (i.monto_depositado || 0) - (i.monto_corte || 0);
-              const hasDiff = Math.abs(diff) >= 1;
-              return (
-                <div key={i.id} className="flex items-center gap-3 p-4 hover:bg-slate-50 transition-colors">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                    i.plataforma === 'Rappi' ? 'bg-orange-100' :
-                    i.plataforma === 'Uber Eats' ? 'bg-green-100' :
-                    i.plataforma === 'Didi Food' ? 'bg-yellow-100' : 'bg-slate-100'
-                  }`}>
-                    <Truck className={`w-4 h-4 ${
-                      i.plataforma === 'Rappi' ? 'text-orange-600' :
-                      i.plataforma === 'Uber Eats' ? 'text-green-600' :
-                      i.plataforma === 'Didi Food' ? 'text-yellow-600' : 'text-slate-500'
-                    }`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-slate-900 text-sm">{i.plataforma}</p>
-                      <span className="text-xs text-slate-400">Semana {i.semana}</span>
-                    </div>
-                    <div className="flex items-center gap-3 mt-0.5 text-xs">
-                      <span className="text-slate-500">Corte: <span className="font-medium text-slate-700">{formatCurrency(i.monto_corte)}</span></span>
-                      <span className="text-slate-500">Dep: <span className="font-medium text-slate-700">{formatCurrency(i.monto_depositado)}</span></span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    {hasDiff ? (
-                      <div className="flex items-center gap-1 text-red-600">
-                        <AlertCircle className="w-3.5 h-3.5" />
-                        <span className="text-sm font-bold">{formatCurrency(diff)}</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1 text-green-600">
-                        <Check className="w-3.5 h-3.5" />
-                        <span className="text-sm font-medium">Conciliado</span>
-                      </div>
-                    )}
-                    <button
-                      onClick={() => deleteIngreso(i.id)}
-                      className="text-slate-300 hover:text-red-500 transition-colors mt-1"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
+          {form && (
+            <form onSubmit={guardar} className="space-y-4">
+              {error && <p role="alert" className="rounded-md border border-rojo/30 bg-rojo/10 p-3 text-sm text-rojo">{error}</p>}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Plataforma</Label>
+                  <Select value={form.plataforma} onValueChange={(v) => setForm({ ...form, plataforma: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {PLATAFORMAS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                <div className="space-y-2">
+                  <Label htmlFor="semana">Semana</Label>
+                  <Input
+                    id="semana"
+                    value={form.semana}
+                    onChange={(e) => setForm({ ...form, semana: e.target.value })}
+                    placeholder="2026-34"
+                    pattern="\d{4}-\d{2}"
+                    className="font-mono"
+                    required
+                  />
+                  <p className="text-[0.6875rem] text-slate-dim">{semanaLegible(form.semana)}</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="corte">Lo que te reportó la plataforma</Label>
+                <Input
+                  id="corte"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0"
+                  value={form.monto_corte}
+                  onChange={(e) => setForm({ ...form, monto_corte: e.target.value })}
+                  placeholder="18400"
+                  className="font-mono"
+                  required
+                />
+              </div>
+
+              {puedeConciliar ? (
+                <div className="rounded-md border border-border bg-steel-high/40 p-3">
+                  <p className="eyebrow mb-3">El depósito</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="deposito">Lo que cayó al banco</Label>
+                      <Input
+                        id="deposito"
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        min="0"
+                        value={form.monto_depositado}
+                        onChange={(e) => setForm({ ...form, monto_depositado: e.target.value })}
+                        placeholder="déjalo vacío si aún no llega"
+                        className="font-mono"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="fdep">Cuándo</Label>
+                      <Input
+                        id="fdep"
+                        type="date"
+                        value={form.fecha_deposito}
+                        onChange={(e) => setForm({ ...form, fecha_deposito: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  {form.monto_depositado !== "" && form.monto_corte !== "" && (
+                    <p className="mt-3 border-t border-border pt-2.5 text-sm">
+                      <span className="text-slate">Diferencia: </span>
+                      <span
+                        className={`money font-semibold ${
+                          Number(form.monto_depositado) - Number(form.monto_corte) < -0.01 ? "text-rojo" : "text-verde"
+                        }`}
+                      >
+                        {moneySigned(Number(form.monto_depositado) - Number(form.monto_corte))}
+                      </span>
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="rounded-md border border-border bg-steel-high/40 p-3 text-xs leading-relaxed text-slate">
+                  El depósito lo registra el dueño. Tú puedes capturar lo que reportó la plataforma.
+                </p>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="notas">Notas</Label>
+                <Textarea
+                  id="notas"
+                  rows={2}
+                  value={form.notas}
+                  onChange={(e) => setForm({ ...form, notas: e.target.value })}
+                  placeholder="Descontaron comisión extra por promoción"
+                />
+              </div>
+
+              <DialogFooter className="gap-2">
+                <Button type="button" variant="outline" onClick={() => setAbierto(false)}>Cancelar</Button>
+                <Button type="submit" disabled={guardando}>
+                  {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {editando ? "Guardar" : "Registrar"}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

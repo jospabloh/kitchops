@@ -1,52 +1,50 @@
 {
   "name": "Alerta",
   "type": "object",
+  "description": "Una alerta generada por el motor de reglas (generarAlertas): gasto que se disparó, depósito que no llegó, insumo por agotarse, ticket sin facturar.",
   "properties": {
+    "business_id": { "type": "string", "description": "Tenant (Business.id) dueño de este registro" },
     "tipo": {
       "type": "string",
-      "enum": [
-        "gasto_alto",
-        "deposito_faltante",
-        "stock_bajo",
-        "ticket_pendiente",
-        "pago_pendiente"
-      ],
+      "enum": ["gasto_alto", "deposito_faltante", "stock_bajo", "ticket_pendiente", "pago_pendiente"],
       "default": "gasto_alto"
     },
-    "titulo": {
-      "type": "string",
-      "description": "T\u00edtulo corto de la alerta"
-    },
-    "mensaje": {
-      "type": "string",
-      "description": "Mensaje detallado"
-    },
-    "severidad": {
-      "type": "string",
-      "enum": [
-        "verde",
-        "amarillo",
-        "rojo"
-      ],
-      "default": "amarillo"
-    },
-    "fecha": {
-      "type": "string",
-      "format": "date-time",
-      "description": "Fecha de generaci\u00f3n"
-    },
-    "leida": {
+    "titulo": { "type": "string", "description": "Título corto de la alerta" },
+    "mensaje": { "type": "string", "description": "Mensaje detallado" },
+    "severidad": { "type": "string", "enum": ["verde", "amarillo", "rojo"], "default": "amarillo" },
+    "fecha": { "type": "string", "format": "date-time", "description": "Fecha de generación" },
+    "leida": { "type": "boolean", "default": false },
+    "entidad_ref": { "type": "string", "description": "Referencia al registro relacionado" },
+    "notificada_whatsapp": {
       "type": "boolean",
-      "default": false
-    },
-    "entidad_ref": {
-      "type": "string",
-      "description": "Referencia al registro relacionado"
+      "default": false,
+      "description": "true cuando el agente de WhatsApp ya empujó esta alerta al dueño, para no repetirla en cada corrida."
     }
   },
-  "required": [
-    "tipo",
-    "titulo",
-    "severidad"
-  ]
+  "required": ["business_id", "tipo", "titulo", "severidad"],
+  // RLS (Module 4): las alertas las CREA el backend (generarAlertas corre como
+  // servicio), no el cliente — por eso create es admin-only. staff puede
+  // marcarlas como leídas, que es todo lo que la UI ofrece.
+  "rls": {
+    "create": { "user_condition": { "role": "admin" } },
+    "read": {
+      "$or": [
+        { "data.business_id": "{{user.data.business_id}}" },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "update": {
+      "$or": [
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "staff" } }] },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "delete": {
+      "$or": [
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
+        { "user_condition": { "role": "admin" } }
+      ]
+    }
+  }
 }

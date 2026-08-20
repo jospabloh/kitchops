@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A second push to the same PR makes the first run's result irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (lint, RLS, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The generated per-function helpers must match what the client registry
+      # produces RIGHT NOW. Without this check the copies drift silently — the
+      # client resolves a permission one way and the server another, and both
+      # look correct in isolation. That is exactly the failure mode
+      # scripts/generate-function-shared.mjs exists to prevent, so it has to be
+      # enforced rather than merely available.
+      - name: Generated function helpers are current
+        run: npm run generate:function-shared -- --check
+
+      # Both halves of every RLS rule. A malformed rule does not error at
+      # runtime — it silently matches every row or none, which is how StockFlow
+      # lost a day to a cross-tenant leak and another to an app-wide read
+      # outage, three days apart.
+      - name: Validate entity RLS
+        run: npm run validate:rls
+
+      - name: Lint
+        run: npx eslint . --quiet
+
+      - name: Build
+        run: npm run build
+
+  backend:
+    name: Backend (Deno lint, type-check, tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Lint
+        run: deno lint
+
+      # base44/tests/ imports nothing but the modules under test and a local
+      # assert helper, so this needs no network and cannot be skipped by a
+      # registry outage. `deno test` type-checks as it goes, which is what
+      # covers _permissions.ts and _providers.ts.
+      - name: Tests
+        run: deno test --allow-env base44/tests/
+
+      # The SDK-free shared modules, checked explicitly. The full entry points
+      # can't be checked here because they import npm:@base44/sdk, which is
+      # resolved by the Base44 runtime rather than by this workflow.
+      - name: Type-check shared modules
+        run: |
+          deno check \
+            base44/functions/gastos/handlers/_guard.ts \
+            base44/functions/gastos/handlers/_audit.ts \
+            base44/functions/gastos/handlers/_gastoFields.ts \
+            base44/functions/ingresos/handlers/_ingresoFields.ts \
+            base44/functions/inventario/handlers/_itemFields.ts \
+            base44/functions/proveedores/handlers/_proveedorFields.ts \
+            base44/functions/alertas/handlers/_alertEngine.ts \
+            base44/functions/whatsapp/handlers/_tools.ts \
+            base44/functions/whatsapp/handlers/_providers.ts

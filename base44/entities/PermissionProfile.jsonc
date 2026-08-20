@@ -1,0 +1,57 @@
+{
+  // Per-tenant overrides of the permission registry defaults (Module 3). One
+  // row per (business_id, role) — in practice only role "staff", since
+  // business_admin is definitionally the tenant owner and always has full
+  // access within its own business_id.
+  //
+  // `permissions` is a flat map of "Sección:acción" => true|false holding ONLY
+  // the keys a tenant admin explicitly changed. A key that is absent falls back
+  // to the registry default (src/lib/permissionRegistry.js). That precedence —
+  // admin → explicit override → registry default — is mirrored exactly by
+  // resolvePermission() on the client and by the Safe functions' own
+  // hasPermission() server-side; the two must never disagree.
+  //
+  // The isolation guarantee here is the RLS below, not the UI: a business_admin
+  // can only ever read or write a profile row carrying their OWN business_id,
+  // so no tenant can widen (or narrow) another tenant's staff permissions even
+  // by calling the API directly.
+  "name": "PermissionProfile",
+  "type": "object",
+  "properties": {
+    "business_id": { "type": "string", "description": "Negocio (tenant) al que aplica este perfil" },
+    "role": { "type": "string", "enum": ["staff"], "default": "staff", "description": "Rol al que aplican los overrides. Sólo 'staff' es configurable." },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Mapa 'Sección:acción' => true|false. Sólo las claves con override explícito; el resto cae en el default del registro."
+    },
+    "updated_by_email": { "type": "string", "description": "Quién hizo el último cambio (auditoría)" }
+  },
+  "required": ["business_id", "role"],
+  "rls": {
+    "create": {
+      "$or": [
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "read": {
+      "$or": [
+        { "data.business_id": "{{user.data.business_id}}" },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "update": {
+      "$or": [
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "delete": {
+      "$or": [
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
+        { "user_condition": { "role": "admin" } }
+      ]
+    }
+  }
+}

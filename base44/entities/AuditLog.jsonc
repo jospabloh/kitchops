@@ -1,0 +1,44 @@
+{
+  // Append-only activity trail. Every Safe function writes one row after a
+  // successful mutation; the WhatsApp agent writes one for every action it
+  // takes on the tenant's behalf, which is the only way a restaurant owner can
+  // later tell "who registered this $4,200 expense" when the answer is "the bot
+  // did, because someone sent it a photo".
+  //
+  // Rows are never updated or deleted from the app: both ops are admin-only, so
+  // neither staff nor a compromised browser can rewrite history to cover a
+  // change. Retention/pruning, if it ever becomes necessary, is a platform-admin
+  // job, not a tenant one.
+  "name": "AuditLog",
+  "type": "object",
+  "properties": {
+    "business_id": { "type": "string", "description": "Tenant (Business.id) dueño de este registro" },
+    "actor_email": { "type": "string", "description": "Email de quien ejecutó la acción" },
+    "actor_role": { "type": "string", "description": "Rol del actor al momento de la acción" },
+    "action": { "type": "string", "description": "Acción ejecutada, en formato 'Sección:acción' (misma clave del registro de permisos)" },
+    "entity": { "type": "string", "description": "Entidad afectada (Gasto, InventarioItem, ...)" },
+    "entity_id": { "type": "string", "description": "ID del registro afectado" },
+    "summary": { "type": "string", "description": "Resumen legible de lo que cambió" },
+    "changes": { "type": "object", "description": "Diff opcional { campo: { antes, despues } }" },
+    "source": {
+      "type": "string",
+      "enum": ["app", "whatsapp", "mission_control", "cron"],
+      "default": "app",
+      "description": "Origen de la acción"
+    },
+    "occurred_at": { "type": "string", "format": "date-time", "description": "Momento de la acción" }
+  },
+  "required": ["business_id", "action"],
+  "rls": {
+    // Escrito sólo por funciones de servicio — nunca directo desde el cliente.
+    "create": { "user_condition": { "role": "admin" } },
+    "read": {
+      "$or": [
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "update": { "user_condition": { "role": "admin" } },
+    "delete": { "user_condition": { "role": "admin" } }
+  }
+}

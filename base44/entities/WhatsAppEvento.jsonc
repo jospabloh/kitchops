@@ -1,0 +1,42 @@
+{
+  // The deduplication ledger. WhatsApp providers deliver at-least-once and
+  // retry up to seven times when a webhook does not answer 2xx within ~5s —
+  // and calling Claude takes longer than that. The handler therefore answers
+  // 200 immediately and processes in the background, which makes duplicate
+  // deliveries not just possible but routine.
+  //
+  // Without this table a retried delivery re-runs the agent's tools, and "registra
+  // un gasto de $4,200 de Sysco" becomes two $4,200 expenses in the books. The
+  // handler claims the event id here BEFORE doing any work; a claim that finds
+  // an existing row drops the delivery.
+  //
+  // `provider_event_id` is the provider's own id (Zernio `payload.id`, Meta
+  // message id). Rows are disposable — this is a ledger, not history — but
+  // nothing in the app deletes them today, so a future prune job would be the
+  // place to bound growth.
+  "name": "WhatsAppEvento",
+  "type": "object",
+  "properties": {
+    "business_id": { "type": "string", "description": "Tenant (Business.id) al que se resolvió el evento" },
+    "provider_event_id": { "type": "string", "description": "Id del evento tal como lo manda el proveedor. La llave de deduplicación." },
+    "proveedor": { "type": "string", "enum": ["zernio", "meta"] },
+    "estado": {
+      "type": "string",
+      "enum": ["reclamado", "procesado", "fallido", "descartado"],
+      "default": "reclamado",
+      "description": "reclamado = alguien está trabajando en él; descartado = no autorizado o el agente está apagado."
+    },
+    "detalle": { "type": "string", "description": "Por qué falló o por qué se descartó" },
+    "recibido_at": { "type": "string", "format": "date-time" }
+  },
+  "required": ["provider_event_id"],
+  "rls": {
+    // Puramente de servicio: lo escribe y lo lee el webhook. Ningún usuario
+    // final tiene por qué verlo, así que read también es admin-only — a
+    // diferencia de las demás entidades, aquí no hay rama de tenant.
+    "create": { "user_condition": { "role": "admin" } },
+    "read": { "user_condition": { "role": "admin" } },
+    "update": { "user_condition": { "role": "admin" } },
+    "delete": { "user_condition": { "role": "admin" } }
+  }
+}

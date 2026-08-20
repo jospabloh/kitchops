@@ -1,0 +1,58 @@
+{
+  // Module 8: a ticket is written to KitchOps FIRST, so it survives a lagging
+  // sync, and Mission Control pulls it into the portfolio-wide `tickets` bodega
+  // through the acaciaControl bridge (tickets.list / tickets.thread /
+  // tickets.update). Triage happens there, not here — this app deliberately has
+  // no per-app triage UI beyond "enviado / respondido / resuelto".
+  "name": "SupportTicket",
+  "type": "object",
+  "properties": {
+    "business_id": { "type": "string", "description": "Tenant (Business.id) que abre el ticket" },
+    "business_name": { "type": "string", "description": "Nombre del negocio, desnormalizado para que Mission Control no tenga que resolverlo" },
+    "subject": { "type": "string", "description": "Asunto del ticket" },
+    "message": { "type": "string", "description": "Descripción inicial" },
+    "category": {
+      "type": "string",
+      "enum": ["soporte", "mejora", "facturacion", "cuenta"],
+      "default": "soporte",
+      "description": "'mejora' = solicitud de función (SLA más largo); el resto son incidentes."
+    },
+    "priority": { "type": "string", "enum": ["low", "normal", "high", "urgent"], "default": "normal" },
+    "status": {
+      "type": "string",
+      "enum": ["submitted", "in_progress", "waiting_customer", "resolved"],
+      "default": "submitted",
+      "description": "Estado del ticket. Lo mueve el operador desde Mission Control; el inquilino sólo lo abre."
+    },
+    "created_by_email": { "type": "string", "description": "Email de quien lo abrió" },
+    "last_message_at": { "type": "string", "format": "date-time", "description": "Último mensaje del hilo" },
+    "last_message_by_role": { "type": "string", "enum": ["owner", "tenant"], "description": "Quién escribió el último mensaje" },
+    "messages_count": { "type": "number", "default": 0 },
+    "unread_for_tenant": { "type": "boolean", "default": false, "description": "Hay respuesta del soporte sin leer" },
+    "resolved_at": { "type": "string", "format": "date-time" },
+    "app_version": { "type": "string", "description": "Versión de KitchOps desde la que se reportó (para reproducir)" }
+  },
+  "required": ["business_id", "subject", "message"],
+  "rls": {
+    "create": {
+      "$or": [
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "staff" } }] },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "read": {
+      "$or": [
+        { "data.business_id": "{{user.data.business_id}}" },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "update": {
+      "$or": [
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "delete": { "user_condition": { "role": "admin" } }
+  }
+}

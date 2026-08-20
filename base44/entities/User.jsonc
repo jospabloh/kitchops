@@ -1,17 +1,67 @@
 {
+  // SECURITY: `role` and `business_id` carry FIELD-LEVEL write RLS locking them
+  // to role `admin` — the tier the service role evaluates as. Without this lock
+  // any authenticated user could call auth.updateMe({ role: "admin" }) and
+  // become a platform-wide admin (every tenant entity carries an unscoped
+  // user_condition:{role:"admin"} RLS branch, which is what lets the backend
+  // Safe functions write at all), or updateMe({ business_id: "<any id>" }) to
+  // walk into another restaurant's data without its invite code.
+  //
+  // NOTE — no entity-level "rls" block here, deliberately. The built-in User is
+  // managed by Base44's auth system and does not support one: adding it makes
+  // asServiceRole.entities.User.update() hang rather than throw, so onboarding
+  // dies with an empty-bodied HTTP 500 and no usable error. Field-level rls on
+  // role/business_id is the supported — and the security-relevant — half.
+  // scripts/validate-rls.mjs fails the build if either half drifts.
+  //
+  // All legitimate changes flow through service-role backend functions:
+  //   complete-onboarding — create a restaurant, or join one with an invite code
+  //   switch-tenant       — move into another restaurant you belong to
+  //   manage-member       — promote/demote/remove an existing member
+  //
+  // DEPLOY ORDER: deploy those functions FIRST, then this schema. If the lock
+  // lands before they are live, onboarding silently no-ops — Base44 drops
+  // disallowed field writes without raising an error, so a new user just gets
+  // stuck on the setup screen with no visible failure.
+  //
+  // The role model (Module 2, layer 2) is declared in src/lib/rbac.js — this
+  // enum is the backend half of the same mapping and must stay in sync with it.
+  "name": "User",
+  "type": "object",
   "properties": {
     "role": {
       "type": "string",
-      "description": "The role of the user in the app",
       "enum": [
         "admin",
-        "user"
-      ]
+        "business_admin",
+        "staff"
+      ],
+      "default": "staff",
+      "description": "Rol del usuario. 'admin' es el nivel de plataforma ACACIA (no un rol de inquilino); 'business_admin' es el dueño/gerente del restaurante; 'staff' es el personal de cocina que captura gastos, inventario y cortes.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
+    },
+    "business_id": {
+      "type": "string",
+      "description": "Negocio (Business.id) en el que el usuario está operando en este momento. Se cambia únicamente vía switch-tenant.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
+    },
+    "last_active_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Última actividad significativa (actualizada con throttle ≥ 15 min)"
     }
   },
-  "required": [
-    "role"
-  ],
-  "name": "User",
-  "type": "object"
+  "required": []
 }

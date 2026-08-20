@@ -1,60 +1,59 @@
 {
   "name": "IngresoPlataforma",
   "type": "object",
+  "description": "Un corte semanal de una plataforma de delivery (Rappi, Uber Eats, Didi Food) y su conciliación contra lo que realmente se depositó al banco.",
   "properties": {
+    "business_id": { "type": "string", "description": "Tenant (Business.id) dueño de este registro" },
     "plataforma": {
       "type": "string",
-      "enum": [
-        "Rappi",
-        "Uber Eats",
-        "Didi Food",
-        "Otros"
-      ],
+      "enum": ["Rappi", "Uber Eats", "Didi Food", "Otros"],
       "default": "Rappi"
     },
-    "semana": {
+    "semana": { "type": "string", "description": "Semana del corte (YYYY-WW)" },
+    "fecha_inicio": { "type": "string", "format": "date", "description": "Fecha inicial del corte" },
+    "fecha_fin": { "type": "string", "format": "date", "description": "Fecha final del corte" },
+    "monto_corte": { "type": "number", "description": "Monto reportado por la plataforma" },
+    "monto_depositado": { "type": "number", "description": "Monto realmente depositado" },
+    "fecha_deposito": { "type": "string", "format": "date", "description": "Fecha en que se depositó" },
+    "conciliado": { "type": "boolean", "default": false },
+    "diferencia": { "type": "number", "description": "Diferencia entre corte y depósito" },
+    "notas": { "type": "string", "description": "Notas sobre la conciliación" },
+    "origen": {
       "type": "string",
-      "description": "Semana del corte (YYYY-WW)"
-    },
-    "fecha_inicio": {
-      "type": "string",
-      "format": "date",
-      "description": "Fecha inicial del corte"
-    },
-    "fecha_fin": {
-      "type": "string",
-      "format": "date",
-      "description": "Fecha final del corte"
-    },
-    "monto_corte": {
-      "type": "number",
-      "description": "Monto reportado por la plataforma"
-    },
-    "monto_depositado": {
-      "type": "number",
-      "description": "Monto realmente depositado"
-    },
-    "fecha_deposito": {
-      "type": "string",
-      "format": "date",
-      "description": "Fecha en que se deposit\u00f3"
-    },
-    "conciliado": {
-      "type": "boolean",
-      "default": false
-    },
-    "diferencia": {
-      "type": "number",
-      "description": "Diferencia entre corte y dep\u00f3sito"
-    },
-    "notas": {
-      "type": "string",
-      "description": "Notas sobre la conciliaci\u00f3n"
+      "enum": ["app", "whatsapp"],
+      "default": "app",
+      "description": "Cómo se capturó el corte"
     }
   },
-  "required": [
-    "plataforma",
-    "semana",
-    "monto_corte"
-  ]
+  "required": ["business_id", "plataforma", "semana", "monto_corte"],
+  // RLS (Module 4): igual que Gasto. El depósito es dinero que entra; borrar un
+  // corte conciliado descuadra la semana, así que delete es business_admin.
+  "rls": {
+    "create": {
+      "$or": [
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "staff" } }] },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "read": {
+      "$or": [
+        { "data.business_id": "{{user.data.business_id}}" },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "update": {
+      "$or": [
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "staff" } }] },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "delete": {
+      "$or": [
+        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
+        { "user_condition": { "role": "admin" } }
+      ]
+    }
+  }
 }
