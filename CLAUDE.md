@@ -168,26 +168,36 @@ one pass, together with the WhatsApp agent. Not yet verified: a live browser
 session as a permission-restricted `staff` against the deployed app, and a real
 inbound WhatsApp message end to end. Both need a deployed backend with secrets.
 
-### Deployed-schema state (2026-08-20) — read before touching an entity
+### Deployed-schema state (2026-08-20) — cutover complete
 
-Per "the repo `.jsonc` is not the deployed schema" above, the live Base44 app
-(`6a83b727bb6cfcaac263ab0d`) and this repo are **deliberately not in sync yet**:
+The multi-tenant cutover was staged in two parts, and **both are now deployed**
+to the live Base44 app (`6a83b727bb6cfcaac263ab0d`). All 18 entities match this
+repo, verified with `list_entity_schemas` after the fact rather than assumed
+from the merge.
 
-- **Deployed** — all 12 *additive* entities: `Business`, `Membership`,
-  `PermissionProfile`, `AuditLog`, `AppSession`, `AppSettings`, `SupportTicket`,
-  `SupportTicketMessage`, `WhatsAppConfig`, `WhatsAppConversacion`,
-  `WhatsAppMensaje`, `WhatsAppEvento`. Adding these breaks nothing, because the
-  currently-deployed client never reads them.
-- **Held back on purpose, until this branch merges:**
-  1. The modifications to `Gasto` / `IngresoPlataforma` / `InventarioItem` /
-     `Proveedor` / `Alerta` that add a required `business_id` and tenant RLS.
-     Deploying them first would break the deployed client, which writes those
-     entities with no `business_id` at all.
-  2. The `User` field-lock on `role`/`business_id`. It needs
-     `complete-onboarding` and `switch-tenant` live first — those are the only
-     writers left once the lock is on, and functions deploy on merge to main.
+The staging is worth remembering, because the same sequencing applies to any
+future change that makes an existing field required:
 
-Deploy both immediately after merging, and re-check with `list_entity_schemas`
-rather than assuming the merge did it. The live app currently holds one user
-(role `admin`) plus seeded demo data, so the admin RLS branch carries no
-lockout risk for this cutover — that will not be true once real tenants exist.
+1. **First, the 12 additive entities** (`Business`, `Membership`,
+   `PermissionProfile`, `AuditLog`, `AppSession`, `AppSettings`,
+   `SupportTicket`, `SupportTicketMessage`, the four `WhatsApp*`). Safe to
+   deploy ahead of the client, because the running client never read them.
+2. **Then, on merge**, the modifications to `Gasto` / `IngresoPlataforma` /
+   `InventarioItem` / `Proveedor` / `Alerta` adding a required `business_id`
+   and tenant RLS, plus the `User` field-lock on `role`/`business_id`.
+   Deploying these first would have broken the running client, which wrote
+   those entities with no `business_id` at all; and the field-lock needs
+   `complete-onboarding` and `switch-tenant` live, since the lock makes them
+   the only remaining writers.
+
+**Left behind on purpose: 9 seeded demo `Gasto` rows (plus the matching
+`IngresoPlataforma`/`InventarioItem`/`Proveedor`/`Alerta` seeds) carry no
+`business_id`.** They are now unreachable to every tenant role — only the
+platform `admin` branch matches them — so they are inert rather than harmful,
+and they were left in place instead of deleted because deleting live rows to
+tidy up is not a call to make silently. Delete them once a real restaurant is
+onboarded and it is clear nobody wants them as a demo.
+
+The live app holds one user (`role: admin`), so the admin RLS branch carried
+no lockout risk for this cutover. **That will not be true once real tenants
+exist** — a future required-field change needs a backfill, not just a deploy.
