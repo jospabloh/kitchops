@@ -269,3 +269,24 @@ fuera, donde grep no ve — un entity hook de Base44, un cron del panel, un
 `tool_config` de un agente, la URL de un webhook. El audit marca esas como
 `REVISAR EN PANEL` en vez de adivinar; confírmalas contra
 `npx base44 functions list` (anota `(N automation)`) antes de tocarlas.
+
+## Módulo 12 (selector de tema): esta app declina, a propósito
+
+El resto del portafolio ganó el 2026-08-21 un selector claro / oscuro /
+dispositivo en una esquina de la pantalla (`jospabloh/acacia-app-standard`,
+módulo 12). **KitchOps no lo lleva, y no es un olvido.**
+
+Un selector sólo tiene sentido si hay más de un tema al que ir, y aquí no lo
+hay por las tres razones que ya explica la cabecera de `src/index.css`: los
+assets de marca son fotografías renderizadas sobre una cocina oscura y flotan
+sobre blanco; el cobre `#C9713F` sobre fondo claro lee como naranja embarrado, y
+con él se va cada acento de la app; y el uso real es un teléfono en una cocina
+con luz baja, entre comandas. Una paleta clara no es una variante de esta: es un
+segundo lenguaje visual y variantes nuevas del logo — un proyecto de diseño, no
+un interruptor.
+
+El módulo 12 contempla explícitamente este caso: una app puede declinar un tema
+si la razón está escrita y nombra la restricción, y entonces **no monta ningún
+control** en vez de montar uno con una sola opción funcional. Si algún día se
+decide que KitchOps tenga tema claro, el orden es paleta primero, assets
+después, y el selector al final — copiándolo de `shared/theme/`.
