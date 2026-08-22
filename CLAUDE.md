@@ -290,3 +290,30 @@ si la razón está escrita y nombra la restricción, y entonces **no monta ning�
 control** en vez de montar uno con una sola opción funcional. Si algún día se
 decide que KitchOps tenga tema claro, el orden es paleta primero, assets
 después, y el selector al final — copiándolo de `shared/theme/`.
+
+## `npm run test:smoke` — comprueba el sitio DESPLEGADO (2026-08-22)
+
+`tests/smoke/smoke.spec.js` es la suite compartida del portafolio, idéntica byte
+a byte en todos los repos; la fuente canónica está en
+`jospabloh/acacia-app-standard` → `shared/smoke/`. Lo propio de esta app vive en
+`tests/smoke/smoke.config.js` (URL, `<title>`, cómo representa el tema).
+
+**No comprueba el build local: comprueba lo que se sirve.** Es la automatización
+de la regla que cada CLAUDE.md repite — mergear no deploya nada, y hay que
+verificar por contenido y no por hash. Afirma cuatro cosas, todas derivadas de
+lo que el propio repo produce (nunca de copy adivinado, que se rompe al cambiar
+una palabra y enseña a ignorar la suite):
+
+1. responde 200 y el `<title>` es el de esta app — no un deploy viejo ni otro;
+2. no lanza excepciones al pintar;
+3. el tema llega resuelto desde el primer frame (el script pre-montaje viajó);
+4. el selector de esquina está montado, cambia el tema y la preferencia
+   sobrevive a un reload.
+
+**No corre en el pipeline normal ni desde un sandbox de desarrollo**: la salida
+HTTPS ahí va por un proxy con allowlist que no incluye estos dominios. Corre en
+GitHub Actions (`.github/workflows/smoke.yml`): `workflow_dispatch` para
+dispararla a mano justo después de un deploy, y un cron diario como red.
+
+    npm run test:smoke                      # contra producción
+    SMOKE_URL=https://… npm run test:smoke  # contra un preview
