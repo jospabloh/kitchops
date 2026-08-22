@@ -10,6 +10,12 @@ export default {
   // and not a stale or unrelated one.
   title: /KitchOps/,
 
+  // Public routes the corner-collision check visits, on top of the home page
+  // (which redirects to /login for a signed-out visitor). These three carry
+  // different chrome from each other; anything behind the login is not reachable
+  // from this suite and needs a look by hand — see Module 12.
+  routes: ['./', './register', './forgot-password'],
+
   theme: {
     // `.dark` on <html>, toggled by next-themes. This app declined a second
     // theme until 2026-08-22 and the suite asserted the switcher's absence;
