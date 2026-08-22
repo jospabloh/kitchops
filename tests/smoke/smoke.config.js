@@ -11,9 +11,11 @@ export default {
   title: /KitchOps/,
 
   theme: {
-    // This app ships one theme on purpose (see CLAUDE.md); the suite
-    //         asserts the switcher's ABSENCE instead of its behaviour.
-    kind: 'none',
+    // `.dark` on <html>, toggled by next-themes. This app declined a second
+    // theme until 2026-08-22 and the suite asserted the switcher's absence;
+    // it now has a real light palette, so it is checked like every other app.
+    // Dark is still the default for anyone who has not chosen.
+    kind: 'class',
     root: '[data-theme-switcher]',
   },
 };

@@ -241,14 +241,14 @@ export default function Soporte() {
                               <div
                                 className={cn(
                                   "max-w-[85%] rounded-lg px-3 py-2",
-                                  m.author_role === "owner" ? "bg-navy" : "bg-steel-high",
+                                  m.author_role === "owner" ? "bg-navy text-on-brand" : "bg-secondary text-foreground",
                                 )}
                               >
                                 <p className="eyebrow mb-1">
                                   {m.author_role === "owner" ? "Soporte ACACIA" : m.author_name || "Tú"}
                                 </p>
-                                <p className="whitespace-pre-wrap text-sm leading-relaxed text-chalk">{m.body}</p>
-                                <p className="mt-1 text-right font-mono text-[0.5625rem] text-white/40">
+                                <p className="whitespace-pre-wrap text-sm leading-relaxed">{m.body}</p>
+                                <p className="mt-1 text-right font-mono text-[0.5625rem] opacity-60">
                                   {fechaHora(m.sent_at || m.created_date)}
                                 </p>
                               </div>

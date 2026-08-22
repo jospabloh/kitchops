@@ -6,12 +6,19 @@ import { cn } from "@/lib/utils";
 // consequence this component exists to handle: it needs a container with its
 // own edge, or it reads as a stray image pasted onto the page. A round tile with
 // a hairline border gives it one, and round is right because the mark is a gear.
+//
+// It is also how the mark survives the light theme without being re-rendered.
+// The tile keeps its own night in both themes (`bg-mark`), so the photograph is
+// never asked to sit on paper — on a light screen it reads as a stamped
+// medallion, which is how a photographic mark is used in print anyway. What
+// flips is only the hairline: white at 10% disappears against a light page, so
+// the edge is a token.
 export function LogoMark({ className, size = 36 }) {
   return (
     <span
       className={cn(
         "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full",
-        "ring-1 ring-white/10 bg-carbon",
+        "bg-mark ring-1 ring-mark-edge/20",
         className,
       )}
       style={{ width: size, height: size }}
@@ -33,16 +40,29 @@ export function LogoMark({ className, size = 36 }) {
 // The full lockup — mark plus "KITCHOPS · Restaurant Management Platform".
 // Used where the brand is the subject (login, onboarding) rather than where it
 // is chrome (the sidebar).
+//
+// Same problem as the mark, one size up: the JPEG's background is baked in, so
+// on a light page a bare <img> reads as an image that failed to load its
+// transparency. It gets a plate of its own night, with padding, so it reads as
+// a printed panel instead — and the plate is the only thing that changes
+// between themes, because in the dark theme it is nearly invisible.
 export function LogoLockup({ className, width = 260 }) {
   return (
-    <img
-      src={width > 600 ? "/logo-lockup-1200.jpg" : "/logo-lockup-600.jpg"}
-      alt="KitchOps"
-      width={width}
-      height={Math.round((width * 514) / 1200)}
-      className={cn("h-auto rounded-md", className)}
-      style={{ width }}
-    />
+    <span
+      className={cn(
+        "inline-flex rounded-md bg-mark p-2 ring-1 ring-mark-edge/20",
+        className,
+      )}
+    >
+      <img
+        src={width > 600 ? "/logo-lockup-1200.jpg" : "/logo-lockup-600.jpg"}
+        alt="KitchOps"
+        width={width}
+        height={Math.round((width * 514) / 1200)}
+        className="h-auto rounded-sm"
+        style={{ width }}
+      />
+    </span>
   );
 }
 

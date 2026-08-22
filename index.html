@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es-MX" class="dark">
+<html lang="es-MX">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -7,7 +7,8 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/logo-32.png" />
     <link rel="apple-touch-icon" href="/logo-192.png" />
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#16181c" />
+    <meta name="theme-color" content="#e6e9ec" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#16181c" media="(prefers-color-scheme: dark)" />
     <meta
       name="description"
       content="KitchOps — control de gastos, cortes de plataformas, inventario y alertas para tu restaurante, con un asistente por WhatsApp."
@@ -34,6 +35,28 @@
     <title>KitchOps — Control de tu cocina</title>
   </head>
   <body>
+    <script>
+      /* Paint the stored theme before React mounts, so the first frame is
+         already the right one instead of flashing and correcting itself.
+         Mirrors the next-themes contract in src/App.jsx: same storage key, same
+         'light' | 'dark' | 'system' values, same `class` attribute, and the same
+         default. Change one and change the other.
+
+         The default is dark, not system: this app is used in a kitchen in low
+         light and that is the ground it was designed on — see the header of
+         src/index.css. Light is a choice someone makes for the desk, not a
+         thing the device decides for them on first load. */
+      (function () {
+        try {
+          var pref = localStorage.getItem('theme') || 'dark';
+          var dark = pref === 'dark' || (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark', dark);
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+        } catch (e) { /* private mode, or no matchMedia — fall through to dark */
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
