@@ -1,8 +1,13 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  // The `dark` class is on <html> permanently — see src/index.css for why this
-  // app has one theme rather than two. Keeping darkMode: ["class"] means stock
-  // shadcn components that branch on it still resolve correctly.
+  // next-themes toggles the `dark` class on <html>; dark is the default and the
+  // ground this app was designed on, light is for the desk in the morning. See
+  // the header of src/index.css.
+  //
+  // Almost nothing in this codebase should need a `dark:` variant: every colour
+  // is a CSS variable that both themes restate, so a screen written against the
+  // tokens follows the theme for free. A `dark:` prefix here is a signal that
+  // something is hardcoded that should not be.
   darkMode: ["class"],
   content: ["./index.html", "./src/**/*.{ts,tsx,js,jsx}"],
   theme: {
@@ -88,6 +93,19 @@ module.exports = {
         rojo: "hsl(var(--rojo))",
         amber: "hsl(var(--amber))",
         verde: "hsl(var(--verde))",
+        // The brand mark is a photograph rendered on a dark kitchen, so it
+        // carries its own ground into daylight rather than being re-lit — see
+        // Logo.jsx. `mark` is that ground, identical in both themes; `mark-edge`
+        // is the hairline that separates the tile from whatever is behind it,
+        // and that one does flip.
+        mark: {
+          DEFAULT: "hsl(var(--mark))",
+          edge: "hsl(var(--mark-edge))",
+        },
+        // Text that sits on a saturated navy / rojo fill. Those fills are dark
+        // in both themes, so their text must NOT be --chalk (which flips to
+        // dark ink in daylight and vanishes).
+        "on-brand": "hsl(var(--on-brand))",
       },
       fontFamily: {
         heading: ["var(--font-heading)"],

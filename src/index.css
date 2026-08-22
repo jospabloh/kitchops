@@ -5,52 +5,99 @@
 /*
   KitchOps design tokens.
 
-  THE APP IS DARK. Not "supports a dark mode" — dark, committed, one theme.
-  Three reasons, in order of how much they mattered:
+  DARK IS THE DEFAULT AND STILL THE HOME GROUND. It is used in a kitchen in warm
+  low light, glanced at between orders, and a white screen at 11pm on the pass is
+  a flashbang nobody wants to dismiss with wet hands. That has not changed, and
+  it is why an unconfigured install opens dark.
 
-  1. The brand assets are photographs. Both logo files are a 3D copper-and-navy
-     mark rendered on a dark, blurred kitchen. They sit correctly on charcoal
-     and float on a white card no matter how you crop them.
-  2. Copper is a dark-ground colour. Against charcoal #C9713F reads as the metal
-     it is; against white it reads as muddy orange, and every accent in the app
-     goes with it.
-  3. It gets used in a kitchen. Warm, low light, glanced at between orders — a
-     white screen at 11pm on the pass is a flashbang, and nobody dims a phone
-     with wet hands.
+  What changed on 2026-08-22 is that there is now a second ground, because there
+  is a second job. Nobody reconciles a week of delivery cortes or types in a
+  stack of supplier invoices standing at the pass — they do it at a desk in the
+  morning, often next to a window, and sometimes they print it. Two times of day
+  in the same room. Not a theme and its inversion.
 
   The palette is sampled from the logo rather than invented around it, which is
   why there are exactly two brand hues (copper, navy) and why the semantic
   colours sit deliberately close to them: an alert red that fights the copper
   makes every screen look broken.
+
+  The three objections that kept this app single-theme are answered, not waived:
+
+  1. The brand assets are photographs — a 3D copper-and-navy mark rendered on a
+     blurred dark kitchen — so they cannot be re-lit for a white page. They are
+     not asked to be: the mark keeps its own night in both themes, inside the
+     round tile it already had (`--mark`, see components/Logo.jsx). On a light
+     screen that reads as a stamped medallion, which is how a photographic mark
+     is used in print anyway.
+  2. Copper on white reads as muddy orange. Measurably: the metal at 52%
+     lightness is 3.4:1 against a light card, which is unreadable as text. So
+     copper splits — the fill keeps the true metal, the ink gets it oxidised.
+     See the --copper block below.
+  3. The kitchen at night is an argument about the DEFAULT, and the default is
+     still dark.
+
+  Contrast was computed, not eyeballed. The light theme clears 4.5:1 on every
+  text pair including the tertiary timestamps, where the dark theme has always
+  sat at 2.8:1.
 */
 
 @layer base {
   :root {
-    /* ── Ground and surfaces ──────────────────────────────────────────────
-       Warm charcoal, not black. Pure #000 with copper on it looks like a
-       terminal; the logo's own background is warm, and the surfaces step up
-       in small increments so a card reads as raised without a shadow. */
-    --carbon: 220 12% 10%;          /* page */
-    --steel: 218 15% 14%;           /* cards, raised surfaces */
-    --steel-high: 218 14% 19%;      /* hover, inputs, dividers */
+    color-scheme: light;
 
-    /* ── Brand ─────────────────────────────────────────────────────────── */
-    --copper: 22 56% 52%;           /* the arrow and the wordmark */
-    --ember: 23 77% 61%;            /* hover / emphasis */
-    --navy: 212 34% 26%;            /* the gear — structure, never text */
-    --navy-high: 212 30% 34%;
+    /* ── Ground and surfaces ──────────────────────────────────────────────
+       DAYLIGHT: the counter, and the sheet on top of it.
+
+       The page is faintly COOL — daylight on brushed stainless — and the card
+       is warm near-white paper laid on it. That warm-on-cool step is what makes
+       a card read as raised here, doing the job the dark theme does with
+       lightness alone (its own step is only 1.11:1). It is also the reason this
+       is not the cream-and-terracotta palette every warm brand defaults to: the
+       counter is steel, and only the prep sheet is paper.
+
+       The token names belong to the dark theme's materials. In daylight they
+       hold the same roles — page, card, raised — drawn from the other half of
+       the same kitchen. */
+    --carbon: 210 14% 91%;          /* page — the counter */
+    --steel: 40 36% 98%;            /* cards — the sheet */
+    --steel-high: 36 16% 88%;       /* hover, inputs, dividers */
+
+    /* ── Brand ─────────────────────────────────────────────────────────────
+       Copper splits in two here, and the split is the whole answer to "copper
+       reads as mud on white". The metal at 52% lightness is a FILL colour: it
+       carries near-black text at 5.3:1 and looks like copper. The same value as
+       INK on a card is 3.4:1 — unreadable, and exactly the muddy orange the
+       objection describes. So ink gets the metal oxidised: a roasted copper
+       that is what copper actually looks like on a surface someone touches all
+       day, and reads at 7.1:1.
+
+       --primary (the fill) is therefore identical in both themes, on purpose.
+       --copper (the ink) is not. */
+    --copper: 19 66% 33%;           /* the arrow and the wordmark, as ink */
+    --ember: 18 72% 27%;            /* hover / emphasis — darker on paper */
+    --navy: 212 42% 28%;            /* the gear — structure, never text */
+    --navy-high: 212 36% 40%;
 
     /* ── Ink ───────────────────────────────────────────────────────────── */
-    --chalk: 35 25% 91%;            /* body text, warm off-white like the hat */
-    --slate: 218 14% 60%;           /* secondary text */
-    --slate-dim: 218 12% 42%;       /* tertiary, timestamps */
+    --chalk: 220 16% 16%;           /* body text */
+    --slate: 217 11% 40%;           /* secondary text */
+    --slate-dim: 217 11% 46%;       /* tertiary, timestamps */
 
     /* ── Semantic ───────────────────────────────────────────────────────
-       Kept inside the brand's warm range on purpose. A pure #EF4444 next to
-       #C9713F reads as two different products arguing. */
-    --rojo: 11 53% 50%;             /* something is wrong now */
-    --amber: 39 67% 55%;            /* worth a look this week */
-    --verde: 136 20% 46%;           /* fine — muted herb, not SaaS mint */
+       Same rule as the dark theme — kept inside the brand's warm range so a
+       red never argues with the copper — but pitched as ink rather than as a
+       glow. On charcoal these sit ABOVE the ground at ~50% lightness; on paper
+       they have to sit below it, or they are invisible as text and the app is
+       full of illegible status. They are used as text 60 times and as a solid
+       fill twice, so text is what they are tuned for. */
+    --rojo: 7 63% 41%;              /* something is wrong now */
+    --amber: 31 74% 33%;            /* worth a look this week */
+    --verde: 146 30% 28%;           /* fine — muted herb, not SaaS mint */
+
+    /* The brand mark keeps its own night, in both themes — see --mark below. */
+    --mark: 220 12% 10%;
+    --mark-edge: 220 10% 78%;
+    --on-brand: 35 25% 95%;         /* text on a saturated navy / rojo fill */
 
     /* ── shadcn/ui contract ─────────────────────────────────────────────
        Mapped onto the tokens above so every stock component inherits the
@@ -61,18 +108,18 @@
     --card-foreground: var(--chalk);
     --popover: var(--steel);
     --popover-foreground: var(--chalk);
-    --primary: var(--copper);
+    --primary: 22 56% 52%;
     --primary-foreground: 220 20% 8%;
     --secondary: var(--steel-high);
     --secondary-foreground: var(--chalk);
     --muted: var(--steel-high);
     --muted-foreground: var(--slate);
     --accent: var(--navy);
-    --accent-foreground: var(--chalk);
+    --accent-foreground: var(--on-brand);
     --destructive: var(--rojo);
-    --destructive-foreground: 35 25% 95%;
-    --border: 218 14% 21%;
-    --input: 218 14% 21%;
+    --destructive-foreground: var(--on-brand);
+    --border: 35 14% 85%;
+    --input: 35 14% 85%;
     --ring: var(--copper);
 
     --chart-1: var(--copper);
@@ -81,13 +128,15 @@
     --chart-4: var(--verde);
     --chart-5: var(--slate);
 
-    --sidebar-background: 220 14% 8%;
+    /* The rail is the recessed side of the counter, not a dark slab dropped
+       into a light app. */
+    --sidebar-background: 210 14% 87%;
     --sidebar-foreground: var(--slate);
     --sidebar-primary: var(--copper);
-    --sidebar-primary-foreground: 220 20% 8%;
-    --sidebar-accent: var(--steel-high);
+    --sidebar-primary-foreground: var(--on-brand);
+    --sidebar-accent: 38 24% 94%;
     --sidebar-accent-foreground: var(--chalk);
-    --sidebar-border: 218 14% 16%;
+    --sidebar-border: 210 12% 80%;
     --sidebar-ring: var(--copper);
 
     /* Small radius throughout: this is equipment, not a consumer app. The
@@ -100,10 +149,51 @@
     --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   }
 
-  /* The class exists so shadcn components that branch on `.dark` behave, but
-     it resolves to the same values — there is no second theme to switch to. */
+  /* ── THE PASS AT 11PM ──────────────────────────────────────────────────
+     The original theme, and still the default: this app is used in a kitchen
+     in low light, between orders, and a white screen at the pass is a
+     flashbang. Light exists for the other half of the job — reconciling cortes
+     and entering invoices at a desk in the morning, and printing. Two times of
+     day in the same room, not a theme and its inversion.
+
+     Only the values below change. Every screen draws from the tokens above, so
+     nothing here needs a `dark:` variant. A new hardcoded colour in a component
+     is a colour that will not follow the theme. */
   .dark {
     color-scheme: dark;
+
+    /* Warm charcoal, not black. Pure #000 with copper on it looks like a
+       terminal; the logo's own background is warm, and the surfaces step up in
+       small increments so a card reads as raised without a shadow. */
+    --carbon: 220 12% 10%;
+    --steel: 218 15% 14%;
+    --steel-high: 218 14% 19%;
+
+    /* Here the metal reads as the metal: 52% against charcoal is the arrow in
+       the logo. It needs no oxidising, so ink and fill are the same value. */
+    --copper: 22 56% 52%;
+    --ember: 23 77% 61%;
+    --navy: 212 34% 26%;
+    --navy-high: 212 30% 34%;
+
+    --chalk: 35 25% 91%;            /* warm off-white, like the hat */
+    --slate: 218 14% 60%;
+    --slate-dim: 218 12% 42%;
+
+    --rojo: 11 53% 50%;
+    --amber: 39 67% 55%;
+    --verde: 136 20% 46%;
+
+    --mark-edge: 0 0% 100%;
+
+    --primary: var(--copper);
+    --border: 218 14% 21%;
+    --input: 218 14% 21%;
+
+    --sidebar-background: 220 14% 8%;
+    --sidebar-primary-foreground: 220 20% 8%;
+    --sidebar-accent: var(--steel-high);
+    --sidebar-border: 218 14% 16%;
   }
 
   * {
@@ -127,11 +217,16 @@
     @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
 
-  /* Chrome/Safari paint date and number spinners in light-mode colours over a
-     dark input, which looks like a rendering bug. */
   input[type="date"]::-webkit-calendar-picker-indicator {
-    filter: invert(0.7);
     cursor: pointer;
+  }
+
+  /* Chrome/Safari paint date and number spinners in light-mode colours, which
+     over a dark input looks like a rendering bug. Inverting them is only
+     correct in the dark theme — applied unconditionally it turns the icon white
+     on a white field, which is the same bug the other way round. */
+  .dark input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.7);
   }
 
   ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -282,4 +377,15 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Corner theme switcher (src/components/ThemeSwitcher.jsx) — placement only.
+   KitchOps has a fixed TOP bar on mobile and no bottom bar, so the corner is
+   free at every width. What does live there is the toast viewport, pinned
+   bottom-right from 640px up; it is pointer-events-none (see ui/toast.jsx), so
+   an empty one no longer swallows the corner, and a visible toast passing over
+   the switcher for a few seconds is not worth moving a permanent control for. */
+:root {
+  --theme-switcher-bottom: 1rem;
+  --theme-switcher-right: 1rem;
 }

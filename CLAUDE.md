@@ -134,9 +134,9 @@ Secrets live in Base44 app secrets, never in an entity: `ANTHROPIC_API_KEY`,
 
 ## Design
 
-One theme, dark, committed — see the header comment in `src/index.css` for why
-(the brand assets are photographs that only sit on dark; copper reads as mud on
-white; it is used in a kitchen at night). Palette is sampled from the logo:
+Dark is the default and the ground this app was designed on; since 2026-08-22
+there is also a light theme for the desk in the morning (see módulo 12 below,
+and the header of `src/index.css`). Palette is sampled from the logo:
 copper `#C9713F`, navy `#2C4159`, warm charcoal `#16181C`. Barlow Condensed for
 display, Inter Tight for body, IBM Plex Mono for money and dates — money is
 tabular everywhere, because a column of figures that shifts as it changes is a
@@ -270,26 +270,80 @@ fuera, donde grep no ve — un entity hook de Base44, un cron del panel, un
 `REVISAR EN PANEL` en vez de adivinar; confírmalas contra
 `npx base44 functions list` (anota `(N automation)`) antes de tocarlas.
 
-## Módulo 12 (selector de tema): esta app declina, a propósito
+## Selector de tema: claro / oscuro / dispositivo (módulo 12, 2026-08-22)
 
-El resto del portafolio ganó el 2026-08-21 un selector claro / oscuro /
-dispositivo en una esquina de la pantalla (`jospabloh/acacia-app-standard`,
-módulo 12). **KitchOps no lo lleva, y no es un olvido.**
-
-Un selector sólo tiene sentido si hay más de un tema al que ir, y aquí no lo
-hay por las tres razones que ya explica la cabecera de `src/index.css`: los
-assets de marca son fotografías renderizadas sobre una cocina oscura y flotan
-sobre blanco; el cobre `#C9713F` sobre fondo claro lee como naranja embarrado, y
-con él se va cada acento de la app; y el uso real es un teléfono en una cocina
-con luz baja, entre comandas. Una paleta clara no es una variante de esta: es un
+**Esta app declinó el módulo 12 durante un día y ahora lo lleva.** La versión
+anterior de esta sección decía que una paleta clara no era una variante sino un
 segundo lenguaje visual y variantes nuevas del logo — un proyecto de diseño, no
-un interruptor.
+un interruptor. Tenía razón en el tamaño del trabajo. Se hizo el proyecto, en el
+orden que ella misma proponía: paleta, assets, y el selector al final.
 
-El módulo 12 contempla explícitamente este caso: una app puede declinar un tema
-si la razón está escrita y nombra la restricción, y entonces **no monta ningún
-control** en vez de montar uno con una sola opción funcional. Si algún día se
-decide que KitchOps tenga tema claro, el orden es paleta primero, assets
-después, y el selector al final — copiándolo de `shared/theme/`.
+**Oscuro sigue siendo el default.** Nadie concilia una semana de cortes de Rappi
+de pie en el pase; eso se hace en un escritorio por la mañana, muchas veces
+junto a una ventana, y a veces se imprime. Dos momentos del día en la misma
+cocina — no un tema y su inversión. Quien no elija nada abre en oscuro.
+
+Las tres objeciones se respondieron, no se archivaron:
+
+1. **Los assets son fotografías** renderizadas sobre una cocina oscura, así que
+   no se pueden reiluminar. No se les pide: **la marca conserva su propia
+   noche** en los dos temas, dentro del disco que ya tenía (`--mark`, en
+   `components/Logo.jsx`). Sobre claro lee como un medallón estampado, que es
+   como se usa una marca fotográfica en impreso de todas formas. El lockup ganó
+   la misma placa, porque un JPEG con fondo horneado suelto sobre papel parece
+   una imagen que no cargó. Y el panel derecho del login es **una isla oscura**:
+   se le pone la clase `dark` a ese subárbol y hereda toda la paleta oscura por
+   variables CSS, sin un solo `dark:`.
+2. **El cobre sobre blanco lee a naranja embarrado.** Medido: el metal a 52% de
+   luminosidad da 3.4:1 contra una tarjeta clara — ilegible como texto. Así que
+   el cobre se parte: `--primary` (el relleno) es **idéntico en los dos temas**,
+   y `--copper` (la tinta) se oxida a 19 66% 33%, que es lo que le pasa al cobre
+   en una superficie que se toca todo el día. 7.1:1.
+3. **La cocina de noche** es un argumento sobre el default, y el default sigue
+   siendo oscuro.
+
+Los contrastes se calcularon, no se miraron: el tema claro pasa 4.5:1 en todos
+los pares de texto **incluidas las marcas de tiempo terciarias**, donde el
+oscuro lleva siempre 2.8:1.
+
+`src/components/ThemeSwitcher.jsx` es **idéntico byte a byte en todas las apps
+del portafolio**. La fuente canónica vive en `jospabloh/acacia-app-standard` →
+`shared/theme/`: cámbialo allí y cópialo, no lo edites aquí. Lo propio de esta
+app es `src/lib/useThemeMode.js` y las variables `--theme-switcher-bottom/right`
+en `src/index.css`.
+
+**Casi nada debería necesitar una variante `dark:`.** Todo color es una variable
+CSS que los dos temas redefinen, así que una pantalla escrita contra los tokens
+sigue el tema gratis. Un `dark:` en este repo es señal de que algo está
+hardcodeado y no debería.
+
+### Lo que el barrido encontró de paso
+
+- **`bg-navy` con `text-chalk`** en las burbujas de Soporte y WhatsApp. `navy` es
+  oscuro en los dos temas y `chalk` se vuelve tinta oscura de día: texto negro
+  sobre azul marino. Ahora usan `text-on-brand`, y la hora de cada mensaje
+  hereda el color de su burbuja (`opacity-60`) en vez de un `text-white/40` fijo.
+- **`UserNotRegisteredError.jsx`, `PageNotFound.jsx` y el spinner de
+  `ProtectedRoute.jsx`** eran andamio de Base44 en inglés, pintado con la escala
+  numérica `slate-50/600/900` de Tailwind — que `tailwind.config.js` **sustituye**
+  por un token de dos valores. Esas clases no existían: llevaban desde siempre
+  sin pintar nada. Reescritos con tokens y en español.
+- **El viewport de los toasts** (`ui/toast.jsx`) es una franja invisible de
+  420px anclada abajo a la derecha de **todas** las pantallas, y se comía los
+  clics de esa esquina — justo donde va el selector. Ahora es
+  `pointer-events-none`, con `pointer-events-auto` en cada toast, que es lo que
+  Radix espera.
+- **El titular del login se solapaba en los dos temas**: `leading-[0.92]` en
+  versalitas con acentos (CUÁNTO, QUEDÓ) hace que la tilde choque con la línea
+  de arriba. A 1.02.
+
+**No verificado:** las pantallas autenticadas (Tablero, Gastos, Inventario,
+Alertas…) en claro — no son alcanzables sin una sesión de Base44 en este
+entorno. El riesgo está acotado: todas dibujan con los mismos tokens que sí se
+revisaron en `/login`, el barrido no dejó un solo color claro hardcodeado, y el
+riel de tickets y la línea de corte se construyen con `var(--steel)` /
+`var(--border)` / `var(--rojo)`, que siguen el tema por definición. Vale un
+vistazo en el primer deploy.
 
 ## `npm run test:smoke` — comprueba el sitio DESPLEGADO (2026-08-22)
 
@@ -317,3 +371,35 @@ dispararla a mano justo después de un deploy, y un cron diario como red.
 
     npm run test:smoke                      # contra producción
     SMOKE_URL=https://… npm run test:smoke  # contra un preview
+
+Desde el 2026-08-22 la suite añade una quinta afirmación, del **módulo 12**: el
+selector no tapa nada y nada lo tapa, en móvil (390), tablet (834) y escritorio
+(1440), plegado y desplegado. Un control anclado por encima de todo en una
+esquina es justo lo que acaba sentado sobre una barra inferior o un botón
+flotante, y entonces la app pierde una función al ancho que nadie abrió. La
+comprobación distingue las dos direcciones — algo pintado encima del selector, y
+el selector respondiendo por un control que hay debajo — y nombra el control
+afectado. Se coloca con `--theme-switcher-bottom/right`; si otra cosa ya es dueña
+de esa esquina, se mueve el selector, no el control.
+
+## Módulo 14 — auditoría de aislamiento multi-tenant (2026-08-22)
+
+Nuevo en `jospabloh/acacia-app-standard`. **No es releer las reglas de RLS** (eso
+es el módulo 4): es recorrer, con fecha y por escrito, todo lo que puede cruzar
+un inquilino con otro — cada entidad, cada función de backend (el inquilino se
+re-deriva en el servidor, nunca del cuerpo de la petición, y en update/delete se
+comprueba contra el registro **almacenado**), cada campo bloqueado, cada
+exportación/reporte/búsqueda, cada destinatario de correo o webhook, y el cambio
+de inquilino. Contra el **esquema desplegado**, no contra el archivo del repo.
+
+Se repite cuando se añade una entidad, una función o un rol. El resultado se
+anota aquí, incluyendo **lo que no se pudo verificar** desde el entorno de
+trabajo — normalmente una sesión autenticada como usuario restringido de un
+segundo inquilino. Decirlo vale más que insinuar una cobertura que no se logró.
+
+Lo que motiva el módulo es que todos los fallos de aislamiento que este
+portafolio llegó a desplegar eran **sintácticamente válidos**: la rama de rol sin
+`$and` al inquilino en `Parish` de cateqhub, las 84 instancias de liuma donde el
+motor descartaba la cláusula hermana de `user_condition`, los campos de licencia
+escribibles por el propio inquilino en puntos y rumbo, y el `PermissionProfile`
+que ningún RLS puede consultar porque vive en otra fila.

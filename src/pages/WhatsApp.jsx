@@ -544,8 +544,8 @@ export default function WhatsAppPage() {
                           className={cn(
                             "max-w-[85%] rounded-lg px-3 py-2",
                             m.direccion === "entrante"
-                              ? "bg-steel-high text-chalk"
-                              : "bg-navy text-chalk",
+                              ? "bg-secondary text-foreground"
+                              : "bg-navy text-on-brand",
                           )}
                         >
                           <p className="whitespace-pre-wrap text-sm leading-relaxed">{m.texto || "(adjunto)"}</p>
@@ -554,7 +554,7 @@ export default function WhatsAppPage() {
                               the line that lets someone trace a number in the
                               dashboard back to the sentence that caused it. */}
                           {Array.isArray(m.acciones) && m.acciones.length > 0 && (
-                            <ul className="mt-2 space-y-0.5 border-t border-white/10 pt-2">
+                            <ul className="mt-2 space-y-0.5 border-t border-current/15 pt-2">
                               {m.acciones.map((a, i) => (
                                 <li
                                   key={i}
@@ -566,7 +566,7 @@ export default function WhatsAppPage() {
                             </ul>
                           )}
 
-                          <p className="mt-1 text-right font-mono text-[0.5625rem] text-white/40">
+                          <p className="mt-1 text-right font-mono text-[0.5625rem] opacity-60">
                             {fechaHora(m.enviado_at || m.created_date)}
                           </p>
                         </div>

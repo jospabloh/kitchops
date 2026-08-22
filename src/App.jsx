@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
+import ThemeSwitcher from "@/components/ThemeSwitcher";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClientInstance } from "@/lib/query-client";
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
@@ -112,15 +114,24 @@ const AuthenticatedApp = () => {
 
 function App() {
   return (
-    <AuthProvider>
-      <QueryClientProvider client={queryClientInstance}>
-        <Router>
-          <ScrollToTop />
-          <AuthenticatedApp />
-        </Router>
-        <Toaster />
-      </QueryClientProvider>
-    </AuthProvider>
+    // defaultTheme="dark" on purpose — see the header of src/index.css and the
+    // pre-mount script in index.html, which has to agree with every value here.
+    // "system" is offered from the switcher; it is not the starting point.
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
+      <AuthProvider>
+        <QueryClientProvider client={queryClientInstance}>
+          <Router>
+            <ScrollToTop />
+            <AuthenticatedApp />
+          </Router>
+          <Toaster />
+          {/* Outside the router and outside Layout: the corner has to be
+              reachable from the login screen and the 404 too, not only from the
+              authenticated shell. */}
+          <ThemeSwitcher />
+        </QueryClientProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

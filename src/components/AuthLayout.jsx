@@ -35,7 +35,19 @@ export default function AuthLayout({ icon: Icon, title, subtitle = null, footer 
         </p>
       </div>
 
-      <div className="relative hidden overflow-hidden border-l border-border lg:block">
+      {/* A dark island, in both themes — `dark` scoped to this subtree rather
+          than a pile of `dark:` variants. Every colour in this app is a CSS
+          variable and .dark restates them, so putting the class here re-points
+          the whole panel's palette by inheritance and nothing inside needs to
+          know which theme the page is in.
+
+          It earns that on the same grounds the logo tile does: the mark is a
+          photograph rendered on a dark kitchen, and this is the one surface big
+          enough to show it at the size it was made for. Washing it out behind a
+          daylight gradient turned it into a grey smudge. In the morning theme
+          the login now reads as a paper form beside a dark brand plate, which
+          is a stronger screen than either half alone. */}
+      <div className="dark relative hidden overflow-hidden border-l border-border bg-carbon text-chalk lg:block">
         {/* The gear mark, oversized and bled off the corner. The square mark
             rather than the horizontal lockup on purpose: the lockup's aspect
             ratio has nothing to do with this panel's, so object-cover crops it
@@ -56,7 +68,11 @@ export default function AuthLayout({ icon: Icon, title, subtitle = null, footer 
           {/* Wrapped by max-width rather than by hard <br />: the display face
               is condensed, so hardcoded breaks that look right in it fall apart
               the moment the font hasn't loaded yet. */}
-          <h2 className="mt-4 max-w-[13ch] font-display text-[3.25rem] font-bold uppercase leading-[0.92] tracking-tight">
+          {/* leading-[1.02], not the 0.92 this started at: set in uppercase
+              Spanish, the accents on CUÁNTO and QUEDÓ rise above cap height and
+              collided with the line above. Condensed faces invite tight leading
+              and then punish it the moment the copy has diacritics. */}
+          <h2 className="mt-4 max-w-[13ch] font-display text-[3.25rem] font-bold uppercase leading-[1.02] tracking-tight">
             Sabes cuánto vendiste.{" "}
             <span className="text-copper">¿Sabes cuánto te quedó?</span>
           </h2>
