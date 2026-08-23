@@ -403,3 +403,99 @@ portafolio llegó a desplegar eran **sintácticamente válidos**: la rama de rol
 motor descartaba la cláusula hermana de `user_condition`, los campos de licencia
 escribibles por el propio inquilino en puntos y rumbo, y el `PermissionProfile`
 que ningún RLS puede consultar porque vive en otra fila.
+
+### Resultado — 2026-08-23, contra el esquema desplegado
+
+Contra `list_entity_schemas` (appId `6a83b727bb6cfcaac263ab0d`) y los 17 grupos
+de funciones. **Es la implementación más sólida del portafolio**, y conviene
+decir por qué antes del hallazgo, porque el hallazgo se entiende mejor así.
+
+#### Un solo hallazgo: `Business` no tiene candados, y su regla no pide rol
+
+```json
+"update": {"$or":[{"id":"{{user.data.business_id}}"},{"user_condition":{"role":"admin"}}]}
+"delete": {"$or":[{"id":"{{user.data.business_id}}"},{"user_condition":{"role":"admin"}}]}
+```
+
+Ninguno de `billing_status`, `license_plan`, `licensed_user_limit`,
+`trial_start_at`, `trial_end_at`, `license_activated_at`, `license_expires_at`,
+`view_only_since`, `payment_reference`, `auto_renewal` ni `scheduled_delete_at`
+lleva `rls.write`. Y la rama de inquilino no exige rol: basta pertenecer, así
+que un `staff` califica.
+
+**Lo que hace este hallazgo distinto de los otros del portafolio es que este
+repo ya lo tenía diagnosticado.** `business/handlers/updateBusinessSafe.ts`
+abre con esto, textual:
+
+> THE WHITELIST IS THE SECURITY CONTROL HERE, not a tidiness measure. […] A
+> passthrough update would let any business_admin grant themselves an unlimited
+> "pro" licence that never expires, from the browser, with no payment involved.
+
+El análisis es correcto y la lista blanca es correcta. Lo que falla es que **la
+función no es la única puerta**: la RLS de entidad deja escribir esa misma fila
+por SDK, sin pasar por la lista blanca, a cualquier miembro del inquilino. La
+defensa está bien razonada y puesta una capa por encima del agujero. Lo mismo
+vale para `delete`: cualquier miembro borra el negocio, y la confirmación
+escrita del módulo 7 vive sólo en la interfaz.
+
+**Latente hoy**: hay 1 `Business` y 1 `User`, el dueño de plataforma con
+`role: admin`. Todavía no existe un `staff` que pueda ejercerlo. Se vuelve real
+con el primer restaurante que se dé de alta con personal.
+
+El arreglo tiene dos mitades y las dos hacen falta: `rls.write: false` en los
+once campos, y una mitad de rol en `update`/`delete`.
+
+### Lo que está bien, y con qué evidencia
+
+- **Un guardia generado, no nueve copias a mano.** `_guard.ts` saca
+  `callerBusinessId` de la fila del usuario y responde 403 a cualquier
+  `business_id` del cuerpo que no coincida — **con el mismo mensaje sea de otro
+  inquilino o un id inventado**, para que nadie averigüe qué negocios existen
+  probando. Después comprueba facturación y permiso. `npm run
+  generate:function-shared` lo reparte a los 9 directorios y CI falla si
+  divergen: las copias son idénticas por construcción, no por disciplina. Es la
+  respuesta correcta al problema que obliga a duplicar (Deno aísla cada
+  directorio) y ninguna otra app del portafolio lo resuelve así.
+- **`switch-tenant` es de manual**, y su cabecera explica el modelo entero:
+  `business_id` y `role` están bloqueados a nivel de campo en `User` para que un
+  navegador no pueda apuntarse a un inquilino arbitrario, y —cita— «ese candado
+  es la base entera del modelo de aislamiento». La membresía se re-lee del
+  servidor, el cuerpo aporta sólo el id destino, el rol sale de la membresía, y
+  la negativa es la misma exista o no el negocio.
+- **Los candados de `User` sí están puestos**: `role` y `business_id`, los dos a
+  `rls.write: {"user_condition":{"role":"admin"}}`. Eso es justo lo que mantiene
+  el hallazgo de arriba **dentro** del inquilino.
+- **`Membership.role` está bloqueado a `role: admin`** — un `business_admin` no
+  puede acuñar una membresía de administrador.
+- **`PermissionProfile` exige `$and[business_id, role: business_admin]`** para
+  crear, editar y borrar. Un `staff` **no** puede reescribir el perfil que lo
+  limita. Es exactamente lo contrario de lo que encontré el mismo día en
+  stockflow, y aquí está bien.
+- **El webhook de WhatsApp —el único endpoint público— es el mejor defendido que
+  he leído en este portafolio.** La firma se verifica sobre los bytes crudos
+  antes de parsear nada; un secreto ausente registra y rechaza en vez de abrir;
+  el inquilino sale del id de cuenta del proveedor vía `WhatsAppConfig`, nunca
+  del contenido del mensaje; y `resolverTenant` **se niega a adivinar** si dos
+  negocios reclaman el mismo id de cuenta, con el motivo escrito en el código
+  («dos inquilinos reclamando un id de cuenta meterían los mensajes de una
+  cocina en los libros de otra»). Cada tool filtra por `ctx.businessId` y la
+  lista blanca de teléfonos se recalcula en cada mensaje, nunca se cachea.
+- **En update/delete se comprueba el registro almacenado**: `ticket.business_id
+  !== g.businessId` en soporte, `member.business_id !== caller.business_id` en
+  `manage-member`. `updateBusinessSafe` no lo necesita porque escribe
+  `g.businessId`, no un id del cuerpo.
+
+### Una cosa anotada, que no es del módulo 14
+
+`Membership.create` permite a un `business_admin` insertar cualquier `user_id`
+en **su propio** negocio sin pasar por el código de invitación (el rol queda en
+`staff` por el candado de campo). No cruza inquilinos; lo que hace es que «quién
+está en mi negocio» no dependa del consentimiento del invitado. Mismo apunte que
+en ctrlhq. Módulo 3.
+
+### Lo que no pude verificar
+
+Una sesión autenticada como `staff` de un segundo restaurante. No hay segundo
+restaurante ni hay staff: el estado vivo al 2026-08-23 es **1 `Business`** y
+**1 `User`** (el dueño de plataforma). Lo de arriba es lectura de código y del
+esquema desplegado.
