@@ -92,12 +92,27 @@ export default function Soporte() {
     setError("");
     setEnviando(true);
     try {
-      await base44.functions.invoke("soporte", {
+      const r = await base44.functions.invoke("soporte", {
         action: "createTicketSafe",
         business_id: user.business_id,
         ...form,
         app_version: APP_VERSION,
       });
+      // Aviso en tiempo real a ACACIA Mission Control (no bloquea la UI). Sin
+      // esto el ticket sólo se veía en el siguiente sync diario de las 08:00
+      // UTC, así que quien escribía a las 09:00 esperaba 23 horas a que
+      // soporte se enterara. Mission Control recibe sólo {app, ticketId} y lee
+      // el ticket real por el puente acaciaControl antes de confiar en el
+      // aviso: un cuerpo falsificado no inyecta nada y aquí no viaja ningún
+      // secreto. Mismo camino que cateqhub, ctrlhq, flowfin y stockflow.
+      const ticketId = r?.data?.ticket?.id;
+      if (ticketId) {
+        fetch("https://control.acaciaco.com.mx/api/ingest/ticket-pull", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ app: "kitchops", ticketId }),
+        }).catch(() => {});
+      }
       toast({ title: "Enviado", description: "Te respondemos por aquí y por correo." });
       setForm(VACIO);
       cargar();

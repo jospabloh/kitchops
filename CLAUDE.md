@@ -552,3 +552,36 @@ llevaba su propio `stableStringify` / `hmacHex` / `timingSafeEqual`, copiados a
 mano contra `api/_lib/ingestSign.js` de Mission Control. Dejarlos al lado del
 helper no es desorden: es una segunda implementación de la misma rutina en el
 mismo archivo, que es exactamente la deriva que este módulo quita.
+
+## Soporte en tiempo real: el sync diario no es la entrega (2026-08-23)
+
+KitchOps creaba el `SupportTicket` con `createTicketSafe` y no avisaba a nadie.
+El ticket sólo aparecía en Mission Control en el siguiente `api/cron/sync`, que
+corre **una vez al día a las 08:00 UTC** — así que quien escribía a las 09:00
+esperaba veintitrés horas a que soporte se enterara. El módulo 8 estaba marcado
+como cumplido porque el ticket sí llegaba; llegaba tarde, que para soporte es
+otra cosa.
+
+De las nueve apps del portafolio, **ésta y ctrlhq eran las dos únicas sin
+aviso**: cuatro firman y empujan el registro (puntos, liuma y radar con una
+función `notifyTicketCreated`; rumbo dentro de su `submitTicket`), y tres ya
+pingaban a Mission Control (cateqhub, flowfin, stockflow).
+
+`Soporte.jsx` lee ahora el id que `createTicketSafe` ya devolvía —`r.data.ticket.id`,
+que se estaba tirando— y hace un `fetch` a
+`https://control.acaciaco.com.mx/api/ingest/ticket-pull` con `{app, ticketId}`,
+sin bloquear la UI y con `.catch(() => {})`: un aviso que falla nunca puede
+costarle el ticket al cliente.
+
+**Por qué desde el cliente y no desde `createTicketSafe`, que ya corre en el
+servidor.** Firmar desde ahí era posible —esta app ya lleva `_acaciaSign.ts` en
+tres directorios— pero habría hecho falta una cuarta copia y una segunda forma
+de hacer lo mismo dentro del portafolio. El cuerpo de `ticket-pull` no se cree:
+Mission Control toma sólo el id y **relee el ticket auténtico por el puente
+`acaciaControl`** antes de escribir nada, así que un cuerpo falsificado no
+inyecta un ticket y un id inventado no hace nada. Menos piezas, misma garantía.
+
+**Falta cablear todo punto donde nazca un ticket, no sólo la página de
+soporte.** Aquí sólo hay uno; en otras apps del portafolio la solicitud de baja
+de la zona de peligro (módulo 7) también crea un ticket y es la que nadie se
+acuerda de conectar.
