@@ -1,15 +1,4 @@
 {
-  // Business — the tenant entity for KitchOps (one restaurant / cocina).
-  //
-  // MODULE 1 of the ACACIA portfolio standard: `billing_status` is written
-  // ONLY by Mission Control's unified lifecycle cron
-  // (acacia-mission-control/api/cron/license-lifecycle.js). KitchOps READS it
-  // to degrade the UI (view_only / suspended), and never runs its own
-  // trial/renewal/reminder cron. Do not add one.
-  //
-  // Every other entity in this app carries `business_id` pointing at this
-  // row's built-in `id`, which is why this entity's RLS scopes by `id`
-  // (a built-in) rather than `data.business_id` (see Module 4).
   "name": "Business",
   "type": "object",
   "properties": {
@@ -19,7 +8,7 @@
     },
     "legal_name": {
       "type": "string",
-      "description": "Razón social"
+      "description": "Raz\u00f3n social"
     },
     "rfc": {
       "type": "string",
@@ -27,11 +16,11 @@
     },
     "phone": {
       "type": "string",
-      "description": "Teléfono de contacto"
+      "description": "Tel\u00e9fono de contacto"
     },
     "address": {
       "type": "string",
-      "description": "Dirección de la sucursal principal"
+      "description": "Direcci\u00f3n de la sucursal principal"
     },
     "logo_url": {
       "type": "string",
@@ -40,7 +29,7 @@
     "currency": {
       "type": "string",
       "default": "MXN",
-      "description": "Moneda de operación"
+      "description": "Moneda de operaci\u00f3n"
     },
     "tax_rate": {
       "type": "number",
@@ -54,12 +43,12 @@
     },
     "invite_code": {
       "type": "string",
-      "description": "Código único de invitación para que el equipo se una"
+      "description": "C\u00f3digo \u00fanico de invitaci\u00f3n para que el equipo se una"
     },
     "invite_code_active": {
       "type": "boolean",
       "default": true,
-      "description": "Si el código de invitación acepta nuevos miembros"
+      "description": "Si el c\u00f3digo de invitaci\u00f3n acepta nuevos miembros"
     },
     "billing_status": {
       "type": "string",
@@ -70,7 +59,7 @@
         "suspended"
       ],
       "default": "trial",
-      "description": "Estado de licencia. LO ESCRIBE ÚNICAMENTE el cron unificado de ACACIA Mission Control; esta app solo lo lee para degradar la UI."
+      "description": "Estado de licencia. LO ESCRIBE \u00daNICAMENTE el cron unificado de ACACIA Mission Control; esta app solo lo lee para degradar la UI."
     },
     "license_plan": {
       "type": "string",
@@ -85,7 +74,7 @@
     "licensed_user_limit": {
       "type": "number",
       "default": 4,
-      "description": "Número de usuarios incluidos en el plan"
+      "description": "N\u00famero de usuarios incluidos en el plan"
     },
     "trial_start_at": {
       "type": "string",
@@ -100,35 +89,35 @@
     "license_activated_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Fecha de activación de la licencia"
+      "description": "Fecha de activaci\u00f3n de la licencia"
     },
     "license_expires_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Fin del periodo actual de facturación"
+      "description": "Fin del periodo actual de facturaci\u00f3n"
     },
     "view_only_since": {
       "type": "string",
       "format": "date-time",
-      "description": "Fecha en que el negocio entró en modo solo lectura"
+      "description": "Fecha en que el negocio entr\u00f3 en modo solo lectura"
     },
     "payment_reference": {
       "type": "string",
-      "description": "Referencia del último pago (Mercado Pago)"
+      "description": "Referencia del \u00faltimo pago (Mercado Pago)"
     },
     "auto_renewal": {
       "type": "boolean",
       "default": false,
-      "description": "Renovación automática de la licencia"
+      "description": "Renovaci\u00f3n autom\u00e1tica de la licencia"
     },
     "scheduled_delete_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Fecha programada de eliminación permanente (zona de peligro)"
+      "description": "Fecha programada de eliminaci\u00f3n permanente (zona de peligro)"
     },
     "deletion_requested_by": {
       "type": "string",
-      "description": "Email de quien solicitó la eliminación de la cuenta"
+      "description": "Email de quien solicit\u00f3 la eliminaci\u00f3n de la cuenta"
     }
   },
   "required": [
@@ -162,7 +151,16 @@
     "update": {
       "$or": [
         {
-          "id": "{{user.data.business_id}}"
+          "$and": [
+            {
+              "id": "{{user.data.business_id}}"
+            },
+            {
+              "user_condition": {
+                "role": "business_admin"
+              }
+            }
+          ]
         },
         {
           "user_condition": {
@@ -174,7 +172,16 @@
     "delete": {
       "$or": [
         {
-          "id": "{{user.data.business_id}}"
+          "$and": [
+            {
+              "id": "{{user.data.business_id}}"
+            },
+            {
+              "user_condition": {
+                "role": "business_admin"
+              }
+            }
+          ]
         },
         {
           "user_condition": {
