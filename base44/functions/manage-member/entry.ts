@@ -51,14 +51,9 @@ Deno.serve(async (req) => {
       if (!["business_admin", "staff"].includes(role)) {
         return Response.json({ message: "role inválido." }, { status: 400 });
       }
-      // Membership.role is the durable record — User.role only reflects the
-      // member's role in whatever tenant they are in right now. Updating just
-      // User.role would silently revert the change the next time they switched
-      // away and back, because switch-tenant restores role from Membership.
-      const rows = await sr.entities.Membership.filter(
-        { user_id: memberId, business_id: member.business_id }, null, 1,
-      );
-      if (rows?.[0]) await sr.entities.Membership.update(rows[0].id, { role });
+      // One user, one tenant: `User.role` IS the durable record. There is no
+      // second copy of it to keep in sync any more — the `Membership` entity
+      // that used to hold one went away with the tenant picker.
       const updated = await sr.entities.User.update(memberId, { role });
       await audit(
         `Cambió el rol de ${member.email || memberId} a ${role === "business_admin" ? "dueño/gerente" : "personal"} en ${business?.name || member.business_id}.`,
@@ -67,25 +62,14 @@ Deno.serve(async (req) => {
     }
 
     if (action === "remove") {
-      // Drop the Membership FIRST, and treat that as the removal. Clearing
-      // business_id alone would not remove anyone: the membership is what grants
-      // the right to re-enter, so switch-tenant would happily let them straight
-      // back in through the tenant picker.
-      const rows = await sr.entities.Membership.filter(
-        { user_id: memberId, business_id: member.business_id }, null, 100,
-      );
-      for (const m of rows || []) await sr.entities.Membership.delete(m.id);
-
-      // Only evict them from the tenant they are actually sitting in. Someone
-      // removed from restaurant A while working in restaurant B keeps working
-      // in B.
-      const stillElsewhere = await sr.entities.Membership.filter({ user_id: memberId }, null, 1);
-      const fallback = stillElsewhere?.[0];
+      // Clearing `business_id` IS the removal: one user, one tenant, and no
+      // separate membership record that could grant a way back in. They land
+      // back on onboarding and can create or join a restaurant again.
       const updated = await sr.entities.User.update(memberId, {
         // The platform owner keeps "admin" — writing role on that account fails,
         // and demoting them would be wrong anyway (see complete-onboarding).
-        ...(member.role === "admin" ? {} : { role: fallback ? fallback.role : "staff" }),
-        business_id: fallback ? fallback.business_id : null,
+        ...(member.role === "admin" ? {} : { role: "staff" }),
+        business_id: null,
       });
       await audit(`Quitó a ${member.email || memberId} de ${business?.name || member.business_id}.`);
       return Response.json({ member: updated });

@@ -22,7 +22,6 @@ import { cn } from "@/lib/utils";
 import { usePermissions } from "@/lib/PermissionContext";
 import { useAuth } from "@/lib/AuthContext";
 import { ROLE_LABELS } from "@/lib/rbac";
-import TenantSwitcher from "@/components/TenantSwitcher";
 import { LogoMark } from "@/components/Logo";
 
 // Grouped, because a flat list of twelve links makes everything look equally
@@ -132,7 +131,15 @@ export default function Layout() {
             you're in, so never naming the current one leaves you guessing. */}
         <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-4">
           <LogoMark size={34} />
-          <TenantSwitcher />
+          <div className="min-w-0">
+            <p
+              className="truncate font-display text-sm font-semibold uppercase tracking-wide text-chalk"
+              title={business?.name || "KitchOps"}
+            >
+              {business?.name || "KitchOps"}
+            </p>
+            <p className="truncate text-[0.6875rem] text-slate-dim">KitchOps</p>
+          </div>
         </div>
 
         <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">

@@ -54,11 +54,14 @@ security-relevant — half, and it is what stops any user from calling
 
 ## Architecture
 
-- **Multi-tenant via `Membership`.** `User.business_id` names the ONE tenant the
-  caller is in right now, and every entity's RLS compares against it. Membership
-  only answers "which tenants may I switch to"; switching is a service-role
-  write via `switch-tenant`, which re-derives membership server-side. Isolation
-  does not weaken as a user joins more restaurants.
+- **One user, one tenant.** `User.business_id` names the single restaurant the
+  caller belongs to, and every entity's RLS compares against it. There is no
+  in-app way to move to another: `complete-onboarding` refuses a caller who
+  already has a `business_id` (409), and leaving is `manage-member`'s `remove`,
+  run by that restaurant's own admin. A `Membership` entity plus a
+  `switch-tenant` function, a `SelectTenant` screen and a sidebar
+  `TenantSwitcher` used to allow several — retired 2026-09-10, see the section
+  at the end of this file.
 - **Roles** live in `src/lib/rbac.js`: `admin` (ACACIA platform tier — the tier
   every RLS admin branch is written against, never given to a tenant's staff),
   `business_admin` (dueño/gerente), `staff` (personal de cocina). Mirrored by
@@ -584,3 +587,39 @@ inyecta un ticket y un id inventado no hace nada. Menos piezas, misma garantía.
 soporte.** Aquí sólo hay uno; en otras apps del portafolio la solicitud de baja
 de la zona de peligro (módulo 7) también crea un ticket y es la que nadie se
 acuerda de conectar.
+
+## Retirado: el selector de restaurante (2026-09-10)
+
+El feature de "un email, varios restaurantes" se quitó entero — nunca llegó a
+producción en el portafolio. Se fueron `base44/functions/switch-tenant`, la
+entidad `Membership`, `src/pages/SelectTenant.jsx` y
+`src/components/TenantSwitcher.jsx` (la cabecera del sidebar vuelve a ser el
+nombre del negocio en texto plano, que es la rama que ese componente ya tenía
+para el caso de una sola membresía).
+
+**Lo que cambió de comportamiento, y por qué cada cosa:**
+
+- `complete-onboarding` responde **409** a quien ya tiene `business_id`, en
+  `create` y en `join`. No es orden: sin selector, un segundo restaurante
+  dejaría el primero inalcanzable.
+- `manage-member` → `remove`: limpiar `business_id` **es** la baja. Ya no hay
+  un registro aparte que conceda la vuelta, así que no queda nada más que
+  borrar.
+- `delete-account`: todos los miembros caen a onboarding. No hay otro
+  restaurante al que devolverlos.
+- `User.jsonc` ya no nombra `switch-tenant` entre los escritores legítimos de
+  `business_id`.
+
+### Pendiente a mano: borrar `Membership` del esquema desplegado
+
+El repo ya no la tiene y nadie la lee ni la escribe, pero **el esquema
+desplegado sí**. Sólo `npm run deploy:entities` la borra, y **va a fallar tal
+cual está**: al 2026-09-10 hay **1 fila viva** (`6a86802f9eafa79a0a6fba72`,
+`h.josepablo@gmail.com`). Base44 rechaza borrar una entidad con registros y el
+push es **todo-o-nada** — en stockflow ese mismo fallo dejó a rumbo sin
+desplegar ninguna de sus 27 entidades por culpa de una sola. Borra la fila
+primero.
+
+El orden del resto es el de siempre (`npm run deploy` para las funciones,
+`npm run deploy:site` para el frontend). Ojo con la nota de `User.jsonc`: las
+funciones van **antes** que el esquema.
