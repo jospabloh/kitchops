@@ -69,19 +69,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Memberships for this tenant go too, otherwise the tenant picker would keep
-    // offering a restaurant that no longer exists.
-    const memberships = await sr.entities.Membership.filter({ business_id: businessId }, null, 500);
-    for (const m of memberships || []) await sr.entities.Membership.delete(m.id);
-
-    // Anyone sitting in this tenant has to land somewhere.
+    // Anyone sitting in this tenant lands back on onboarding — one user, one
+    // tenant, so there is no other restaurant to fall them back into. This
+    // function has never deleted login identities.
     const members = await sr.entities.User.filter({ business_id: businessId });
     for (const member of members) {
-      const elsewhere = await sr.entities.Membership.filter({ user_id: member.id }, null, 1);
-      const fallback = elsewhere?.[0];
       await sr.entities.User.update(member.id, {
-        ...(member.role === "admin" ? {} : { role: fallback ? fallback.role : "staff" }),
-        business_id: fallback ? fallback.business_id : null,
+        ...(member.role === "admin" ? {} : { role: "staff" }),
+        business_id: null,
       });
     }
 

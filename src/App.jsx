@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
@@ -28,7 +27,6 @@ import Permisos from "@/pages/Permisos";
 import Soporte from "@/pages/Soporte";
 import Manual from "@/pages/Manual";
 import Onboarding from "@/pages/Onboarding";
-import SelectTenant, { TENANT_CHOSEN_KEY } from "@/pages/SelectTenant";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import ForgotPassword from "@/pages/ForgotPassword";
@@ -42,10 +40,7 @@ const Spinner = () => (
 );
 
 const AuthenticatedApp = () => {
-  const { user, memberships, isLoadingAuth, isLoadingPublicSettings, authError } = useAuth();
-  const [tenantElegido, setTenantElegido] = useState(
-    () => typeof sessionStorage !== "undefined" && Boolean(sessionStorage.getItem(TENANT_CHOSEN_KEY)),
-  );
+  const { user, isLoadingAuth, isLoadingPublicSettings, authError } = useAuth();
 
   if (isLoadingPublicSettings || isLoadingAuth) return <Spinner />;
 
@@ -60,13 +55,6 @@ const AuthenticatedApp = () => {
   // entity's service-role RLS branch, not to let a human skip setting up a
   // restaurant.
   if (user && !user.business_id) return <Onboarding />;
-
-  // Belonging to more than one restaurant means the app cannot guess which set
-  // of numbers you meant to open, so ask — once per session. One membership
-  // skips this entirely.
-  if (user && !tenantElegido && (memberships?.length || 0) > 1) {
-    return <SelectTenant onChosen={() => setTenantElegido(true)} />;
-  }
 
   return (
     <Routes>

@@ -16,7 +16,6 @@
   //
   // All legitimate changes flow through service-role backend functions:
   //   complete-onboarding — create a restaurant, or join one with an invite code
-  //   switch-tenant       — move into another restaurant you belong to
   //   manage-member       — promote/demote/remove an existing member
   //
   // DEPLOY ORDER: deploy those functions FIRST, then this schema. If the lock
@@ -48,7 +47,7 @@
     },
     "business_id": {
       "type": "string",
-      "description": "Negocio (Business.id) en el que el usuario está operando en este momento. Se cambia únicamente vía switch-tenant.",
+      "description": "Negocio (Business.id) al que pertenece el usuario. Un usuario pertenece a un solo negocio: lo asigna complete-onboarding y sólo manage-member (remove) lo limpia.",
       "rls": {
         "write": {
           "user_condition": {
