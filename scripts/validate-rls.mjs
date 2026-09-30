@@ -160,7 +160,7 @@ function checkEntity(fileName) {
           "role/business_id only (see this entity's header comment)."
       );
     }
-    for (const field of ["role", "business_id"]) {
+    for (const field of ["role", "business_id", "pending_business_id", "join_requested_at"]) {
       const write = schema.properties?.[field]?.rls?.write;
       if (!write || !hasAdminBranch(write)) {
         errors.push(

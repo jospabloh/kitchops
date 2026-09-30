@@ -28,7 +28,7 @@ export const MANUAL = [
       },
       {
         q: "¿Cómo invito a mi equipo?",
-        a: "En Cuenta → Equipo hay un código de invitación. Se lo pasas y con eso entran, como personal de cocina. Si el código se te sale de las manos, generas otro y el anterior deja de servir al instante.",
+        a: "En Cuenta → Equipo hay un código de invitación. Se lo pasas y la persona envía una solicitud; tú la apruebas ahí mismo y eliges su rol (dueño/gerente o personal de cocina). Sin tu aprobación no ve nada. Si el código se te sale de las manos, generas otro y el anterior deja de servir al instante.",
       },
     ],
   },

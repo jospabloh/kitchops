@@ -15,13 +15,16 @@ import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
+  Check,
   Copy,
   Download,
   Loader2,
   RefreshCw,
   ShieldAlert,
   UserMinus,
+  UserPlus,
   Users2,
+  X,
 } from "lucide-react";
 
 const BILLING = {
@@ -42,6 +45,11 @@ export default function Cuenta() {
 
   const [miembros, setMiembros] = useState([]);
   const [cargandoMiembros, setCargandoMiembros] = useState(true);
+  // Solicitudes de unión: quien entró con el código y espera aprobación. Cada una
+  // lleva el rol que el dueño elige al aprobar (por defecto, personal de cocina).
+  const [solicitudes, setSolicitudes] = useState([]);
+  const [rolesElegidos, setRolesElegidos] = useState({});
+  const [decidiendo, setDecidiendo] = useState(null);
   const [perfil, setPerfil] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [confirmacion, setConfirmacion] = useState("");
@@ -81,6 +89,36 @@ export default function Cuenta() {
   }, [puedeMiembros, user?.business_id]);
 
   useEffect(() => { cargarMiembros(); }, [cargarMiembros]);
+
+  const cargarSolicitudes = useCallback(async () => {
+    if (!puedeMiembros || !user?.business_id) return;
+    try {
+      const res = await base44.functions.invoke("manage-member", { action: "list_requests" });
+      setSolicitudes((res?.data ?? res)?.requests || []);
+    } catch (e) {
+      console.error(e);
+    }
+  }, [puedeMiembros, user?.business_id]);
+
+  useEffect(() => { cargarSolicitudes(); }, [cargarSolicitudes]);
+
+  const decidir = async (s, aprobar) => {
+    setDecidiendo(s.id);
+    try {
+      await base44.functions.invoke("manage-member", {
+        action: aprobar ? "approve_request" : "reject_request",
+        memberId: s.id,
+        role: rolesElegidos[s.id] || ROLES.STAFF,
+      });
+      toast({ title: aprobar ? "Persona aprobada" : "Solicitud rechazada" });
+      await Promise.all([cargarSolicitudes(), cargarMiembros()]);
+    } catch (err) {
+      toast({ title: mensajeDeError(err, "No pudimos procesar la solicitud"), variant: "destructive" });
+      cargarSolicitudes();
+    } finally {
+      setDecidiendo(null);
+    }
+  };
 
   const guardarPerfil = async (e) => {
     e.preventDefault();
@@ -343,7 +381,8 @@ export default function Cuenta() {
                 <section className="rounded-lg border border-border bg-card p-5">
                   <h2 className="font-display text-lg font-semibold text-chalk">Invitar a alguien</h2>
                   <p className="mt-1 text-sm leading-relaxed text-slate">
-                    Pásale este código. Quien lo tenga entra como personal de cocina.
+                    Pásale este código. Quien lo use envía una solicitud: no entra hasta que tú la
+                    apruebes aquí abajo y elijas su rol.
                   </p>
 
                   <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -371,9 +410,62 @@ export default function Cuenta() {
                   </div>
 
                   <p className="mt-3 text-xs leading-relaxed text-slate-dim">
-                    Un código es como una llave: quien lo tenga entra. Si se te salió de las manos,
-                    genera otro — el anterior deja de servir al instante.
+                    Aunque alguien tenga el código, sin tu aprobación no ve nada de tu negocio. Si se
+                    te salió de las manos, genera otro: el anterior deja de servir al instante.
                   </p>
+                </section>
+              )}
+
+              {solicitudes.length > 0 && (
+                <section className="overflow-hidden rounded-lg border border-copper/40 bg-card">
+                  <div className="border-b border-border bg-copper/10 px-4 py-2.5">
+                    <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-chalk">
+                      Solicitudes para unirse ({solicitudes.length})
+                    </h2>
+                  </div>
+                  <ul className="divide-y divide-border">
+                    {solicitudes.map((s) => (
+                      <li key={s.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <UserPlus className="h-4 w-4 shrink-0 text-copper" aria-hidden="true" />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-chalk">{s.full_name || s.email}</p>
+                            <p className="truncate font-mono text-[0.6875rem] text-slate-dim">
+                              {s.email}{s.requested_at ? ` · ${fecha(s.requested_at)}` : ""}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Select
+                            value={rolesElegidos[s.id] || ROLES.STAFF}
+                            onValueChange={(v) => setRolesElegidos({ ...rolesElegidos, [s.id]: v })}
+                          >
+                            <SelectTrigger className="h-9 w-44" aria-label={`Rol para ${s.email}`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {ASSIGNABLE_ROLES.map((r) => (
+                                <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button size="sm" disabled={decidiendo === s.id} onClick={() => decidir(s, true)}>
+                            {decidiendo === s.id ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Check className="mr-1.5 h-3.5 w-3.5" />}
+                            Aprobar
+                          </Button>
+                          <button
+                            type="button"
+                            disabled={decidiendo === s.id}
+                            onClick={() => decidir(s, false)}
+                            aria-label={`Rechazar a ${s.email}`}
+                            className="rounded-sm p-2 text-slate-dim transition-colors hover:bg-rojo/15 hover:text-rojo"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
                 </section>
               )}
 
