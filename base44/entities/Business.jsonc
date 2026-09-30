@@ -59,7 +59,14 @@
         "suspended"
       ],
       "default": "trial",
-      "description": "Estado de licencia. LO ESCRIBE \u00daNICAMENTE el cron unificado de ACACIA Mission Control; esta app solo lo lee para degradar la UI."
+      "description": "Estado de licencia. LO ESCRIBE \u00daNICAMENTE el cron unificado de ACACIA Mission Control; esta app solo lo lee para degradar la UI. Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
     "license_plan": {
       "type": "string",
@@ -69,51 +76,121 @@
         "pro"
       ],
       "default": "start",
-      "description": "Plan contratado"
+      "description": "Plan contratado Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
     "licensed_user_limit": {
       "type": "number",
       "default": 4,
-      "description": "N\u00famero de usuarios incluidos en el plan"
+      "description": "N\u00famero de usuarios incluidos en el plan Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
     "trial_start_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Inicio del periodo de prueba"
+      "description": "Inicio del periodo de prueba Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
     "trial_end_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Fin del periodo de prueba"
+      "description": "Fin del periodo de prueba Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
     "license_activated_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Fecha de activaci\u00f3n de la licencia"
+      "description": "Fecha de activaci\u00f3n de la licencia Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
     "license_expires_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Fin del periodo actual de facturaci\u00f3n"
+      "description": "Fin del periodo actual de facturaci\u00f3n Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
     "view_only_since": {
       "type": "string",
       "format": "date-time",
-      "description": "Fecha en que el negocio entr\u00f3 en modo solo lectura"
+      "description": "Fecha en que el negocio entr\u00f3 en modo solo lectura Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
     "payment_reference": {
       "type": "string",
-      "description": "Referencia del \u00faltimo pago (Mercado Pago)"
+      "description": "Referencia del \u00faltimo pago (Mercado Pago) Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
     "auto_renewal": {
       "type": "boolean",
       "default": false,
-      "description": "Renovaci\u00f3n autom\u00e1tica de la licencia"
+      "description": "Renovaci\u00f3n autom\u00e1tica de la licencia Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
     "scheduled_delete_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Fecha programada de eliminaci\u00f3n permanente (zona de peligro)"
+      "description": "Fecha programada de eliminaci\u00f3n permanente (zona de peligro) Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
     "deletion_requested_by": {
       "type": "string",
@@ -163,25 +240,9 @@
       ]
     },
     "delete": {
-      "$or": [
-        {
-          "$and": [
-            {
-              "id": "{{user.data.business_id}}"
-            },
-            {
-              "user_condition": {
-                "role": "business_admin"
-              }
-            }
-          ]
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     }
   }
 }
