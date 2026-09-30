@@ -623,3 +623,68 @@ primero.
 El orden del resto es el de siempre (`npm run deploy` para las funciones,
 `npm run deploy:site` para el frontend). Ojo con la nota de `User.jsonc`: las
 funciones van **antes** que el esquema.
+
+## 2026-09-30: verificación de correo por código y unirse con código = solicitud pendiente
+
+**Qué cambió**
+
+*A. Código de verificación del correo (OTP).* `src/components/VerifyEmailStep.jsx`
+es el paso compartido donde se escribe el código (`verifyOtp({email, otpCode})`,
+`resendOtp`, login automático con la contraseña ya tecleada, y a `/login` si eso
+falla). Lo usan `Register` (tras crear la cuenta, ya sin textos en inglés) y
+`Login`: si el login falla por correo sin verificar (`needsEmailVerification`,
+`src/lib/emailVerification.js`, regex amplia a propósito) abre ese mismo paso y
+pide un código nuevo. Todo en español, sin rayas largas.
+
+*B. Modelo de tenant y roles.* Unirse con el código **ya no da acceso**:
+`complete-onboarding` `join` sólo guarda `User.pending_business_id` (+
+`join_requested_at`; los dos bloqueados a admin en `User.jsonc`, sin bloque `rls`
+de entidad) y responde sólo el nombre del negocio (nunca el código). No se
+escribe `business_id` ni `role`, así que `_guard.ts` y la RLS le niegan todo
+mientras espera. Modos nuevos `status` y `cancel` para la pantalla "Solicitud
+enviada" de `Onboarding`, que sale del servidor y por eso sobrevive a recargar.
+`manage-member` gana `list_requests`, `approve_request` y `reject_request` (sin
+endpoint nuevo, 16/40): exigen `business_admin` del negocio destino, releen la
+solicitud guardada (el cuerpo sólo dice *quién*, nunca *dónde*), y el rol sale de
+la lista blanca `business_admin | staff` (nunca `admin`). Es el único camino que
+escribe `business_id` a quien entra con código. Un solicitante pendiente no puede
+crear negocio (409); se conservan los 409 de "ya perteneces a un negocio".
+`Cuenta > Equipo` muestra las solicitudes y el dueño elige el rol al aprobar.
+`remove` y `delete-account` también limpian solicitudes. Lógica pura y probada en
+`_join.ts` y `_requests.ts`.
+
+Endurecimiento de paso en `manage-member`: `!caller.business_id` ya no pasa el
+chequeo de tenant (dos personas sin negocio comparaban `undefined === undefined`)
+y un `business_admin` ya no puede tocar a un usuario `admin` de plataforma.
+
+**Lo que ya cumplía (sin cambios):** quien crea un negocio queda `business_admin`
+de SU negocio; el dueño de plataforma conserva `admin` (`rolePatchFor`); todas las
+funciones derivan el tenant de `user.business_id` del servidor y `_guard.ts`
+rechaza sin negocio; la RLS de las 14 entidades con tenant es la forma de 4
+operaciones con rama admin de servicio (`validate:rls`).
+
+**Verificado:** `npm run lint`, `build`, `validate:rls` (17/14, ahora exige los
+dos campos nuevos bloqueados), `validate:functions` 16/40,
+`generate:function-shared --check`, `deno lint`, `deno test --allow-env
+base44/tests/` (46/46, con `join_requests_test.ts` y `email_verification_test.ts`).
+`deno check` de las tres funciones editadas: sólo los 3 errores que ya tenían.
+
+**NO verificado:** nada corrió contra Base44 ni en navegador. En concreto: que
+`verifyOtp`/`resendOtp` y el mensaje real de "correo sin verificar" coincidan con
+la regex; que `User.filter({pending_business_id})` funcione (campo nuevo aún no
+desplegado); que `auth.me()` devuelva `pending_business_id`; una sesión real de
+solicitante y de dueño aprobando; y la RLS desplegada (releer con
+`list_entity_schemas`, no asumir).
+
+**Qué desplegar y en qué orden** (el usuario con solicitud pendiente depende de
+los campos nuevos; un campo fuera del esquema desplegado se descarta en silencio):
+1. `npm run deploy:entities` primero (sólo cambia `User`, aditivo) y releer
+   `User` con `list_entity_schemas`: `pending_business_id` y `join_requested_at`
+   con su `rls.write` de admin, y sin bloque `rls` de entidad.
+2. `npm run deploy` (`complete-onboarding`, `manage-member`, `delete-account`) y
+   verificar por comportamiento: `manage-member` con `{"action":"list_requests"}`
+   sin sesión responde 401; con código viejo responde `action debe ser...`.
+3. `npm run deploy:site`. Si el sitio saliera antes que las funciones, "Unirme"
+   entraría directo (comportamiento viejo) y Cuenta no vería solicitudes.
+Si algún usuario ya se unió por código antes de esto, sigue con su rol `staff`:
+no se migra nada.

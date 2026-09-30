@@ -15,8 +15,11 @@
   // scripts/validate-rls.mjs fails the build if either half drifts.
   //
   // All legitimate changes flow through service-role backend functions:
-  //   complete-onboarding — create a restaurant, or join one with an invite code
-  //   manage-member       — promote/demote/remove an existing member
+  //   complete-onboarding — create a restaurant, or FILE a join request with an
+  //                         invite code (pending_business_id; grants nothing)
+  //   manage-member       — approve/reject a join request (the only place a
+  //                         code-joiner gets business_id, with a role picked by
+  //                         the owner), promote/demote/remove a member
   //
   // DEPLOY ORDER: deploy those functions FIRST, then this schema. If the lock
   // lands before they are live, onboarding silently no-ops — Base44 drops
@@ -48,6 +51,29 @@
     "business_id": {
       "type": "string",
       "description": "Negocio (Business.id) al que pertenece el usuario. Un usuario pertenece a un solo negocio: lo asigna complete-onboarding y sólo manage-member (remove) lo limpia.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
+    },
+    "pending_business_id": {
+      "type": "string",
+      "description": "Solicitud de unión pendiente: Business.id al que la persona pidió entrar con un código de invitación. NO da acceso a nada: ninguna regla RLS ni _guard.ts lo lee, sólo business_id cuenta. Lo escribe complete-onboarding (join) y lo limpia manage-member (aprobar/rechazar/quitar) o la propia persona (cancelar). Bloqueado a admin (sólo escriben las funciones de servicio) para que nadie pueda inventar solicitudes a nombre de otra persona ni saltarse la aprobación del dueño.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
+    },
+    "join_requested_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Cuándo se envió la solicitud de unión (se muestra al dueño al aprobar). Va junto a pending_business_id y con el mismo bloqueo.",
       "rls": {
         "write": {
           "user_condition": {

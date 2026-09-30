@@ -5,11 +5,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UserPlus, Mail, Lock, Loader2 } from "lucide-react";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import AuthLayout from "@/components/AuthLayout";
 import GoogleIcon from "@/components/GoogleIcon";
-import { toast } from "@/components/ui/use-toast";
+import VerifyEmailStep from "@/components/VerifyEmailStep";
 import { safeReturnTo } from "@/lib/authReturnTo";
+
+// Base44 responde en inglés; el fallback es honesto y accionable.
+function mensajeDeRegistro(err) {
+  const raw = String(err?.message || err?.data?.message || "").toLowerCase();
+  if (raw.includes("already") || raw.includes("exists") || raw.includes("registered")) {
+    return "Ya existe una cuenta con ese correo. Inicia sesión o recupera tu contraseña.";
+  }
+  if (raw.includes("password")) return "La contraseña no es válida. Usa al menos 8 caracteres.";
+  if (raw.includes("email")) return "Revisa que el correo esté bien escrito.";
+  if (raw.includes("network") || raw.includes("fetch") || raw.includes("timeout")) {
+    return "No pudimos conectar. Revisa tu internet e inténtalo otra vez.";
+  }
+  return "No pudimos crear tu cuenta. Inténtalo otra vez o escríbenos.";
+}
 
 export default function Register() {
   const [email, setEmail] = useState("");
@@ -18,13 +31,14 @@ export default function Register() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showOtp, setShowOtp] = useState(false);
-  const [otpCode, setOtpCode] = useState("");
+
+  const loginQuery = safeReturnTo() !== "/" ? "?returnTo=" + encodeURIComponent(safeReturnTo()) : "";
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     if (password !== confirmPassword) {
-      setError("Passwords do not match");
+      setError("Las contraseñas no coinciden.");
       return;
     }
     setLoading(true);
@@ -32,38 +46,9 @@ export default function Register() {
       await base44.auth.register({ email, password });
       setShowOtp(true);
     } catch (err) {
-      setError(err.message || "Registration failed");
+      setError(mensajeDeRegistro(err));
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleVerify = async () => {
-    setError("");
-    setLoading(true);
-    try {
-      const result = await base44.auth.verifyOtp({ email, otpCode });
-      if (result?.access_token) {
-        base44.auth.setToken(result.access_token);
-      }
-      window.location.href = safeReturnTo();
-    } catch (err) {
-      setError(err.message || "Invalid verification code");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResend = async () => {
-    setError("");
-    try {
-      await base44.auth.resendOtp(email);
-      toast({
-        title: "Code sent",
-        description: "Check your email for the new code.",
-      });
-    } catch (err) {
-      setError(err.message || "Failed to resend code");
     }
   };
 
@@ -75,52 +60,20 @@ export default function Register() {
     return (
       <AuthLayout
         icon={Mail}
-        title="Verify your email"
-        subtitle={`We sent a code to ${email}`}
+        title="Verifica tu correo"
+        subtitle={`Enviamos un código de 6 dígitos a ${email}`}
       >
-        {error && (
-          <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
-            {error}
-          </div>
-        )}
-        <div className="flex justify-center mb-6">
-          <InputOTP
-            maxLength={6}
-            value={otpCode}
-            onChange={setOtpCode}
-            autoFocus
-            autoComplete="one-time-code"
-          >
-            <InputOTPGroup>
-              <InputOTPSlot index={0} />
-              <InputOTPSlot index={1} />
-              <InputOTPSlot index={2} />
-              <InputOTPSlot index={3} />
-              <InputOTPSlot index={4} />
-              <InputOTPSlot index={5} />
-            </InputOTPGroup>
-          </InputOTP>
-        </div>
-        <Button
-          className="w-full h-12 font-medium"
-          onClick={handleVerify}
-          disabled={loading || otpCode.length < 6}
-        >
-          {loading ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Verifying...
-            </>
-          ) : (
-            "Verify"
-          )}
-        </Button>
-        <p className="text-center text-sm text-muted-foreground mt-4">
-          Didn't receive the code?{" "}
-          <button onClick={handleResend} className="text-primary font-medium hover:underline">
-            Resend
-          </button>
-        </p>
+        <VerifyEmailStep
+          email={email}
+          password={password}
+          onDone={({ needsLogin }) => {
+            window.location.href = needsLogin ? "/login" + loginQuery : safeReturnTo();
+          }}
+          onCancel={() => {
+            setShowOtp(false);
+            setError("");
+          }}
+        />
       </AuthLayout>
     );
   }
@@ -128,16 +81,16 @@ export default function Register() {
   return (
     <AuthLayout
       icon={UserPlus}
-      title="Create your account"
-      subtitle="Sign up to get started"
+      title="Crea tu cuenta"
+      subtitle="Regístrate para empezar"
       footer={
         <>
-          Already have an account?{" "}
+          ¿Ya tienes cuenta?{" "}
           <Link
-            to={"/login" + (safeReturnTo() !== "/" ? "?returnTo=" + encodeURIComponent(safeReturnTo()) : "")}
+            to={"/login" + loginQuery}
             className="text-primary font-medium hover:underline"
           >
-            Log in
+            Entrar
           </Link>
         </>
       }
@@ -148,7 +101,7 @@ export default function Register() {
         onClick={handleGoogle}
       >
         <GoogleIcon className="w-5 h-5 mr-2" />
-        Continue with Google
+        Continuar con Google
       </Button>
 
       <div className="relative mb-6">
@@ -156,7 +109,7 @@ export default function Register() {
           <div className="w-full border-t border-border" />
         </div>
         <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-card px-3 text-muted-foreground">or</span>
+          <span className="bg-card px-3 text-muted-foreground">o con tu correo</span>
         </div>
       </div>
 
@@ -168,7 +121,7 @@ export default function Register() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email">Correo</Label>
           <div className="relative">
             <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
             <Input
@@ -176,7 +129,7 @@ export default function Register() {
               type="email"
               autoComplete="email"
               autoFocus
-              placeholder="you@example.com"
+              placeholder="tu@correo.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="pl-10 h-12"
@@ -185,7 +138,7 @@ export default function Register() {
           </div>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="password">Password</Label>
+          <Label htmlFor="password">Contraseña</Label>
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
             <Input
@@ -201,7 +154,7 @@ export default function Register() {
           </div>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="confirm">Confirm Password</Label>
+          <Label htmlFor="confirm">Confirmar contraseña</Label>
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
             <Input
@@ -220,10 +173,10 @@ export default function Register() {
           {loading ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Creating account...
+              Creando cuenta…
             </>
           ) : (
-            "Create account"
+            "Crear cuenta"
           )}
         </Button>
       </form>

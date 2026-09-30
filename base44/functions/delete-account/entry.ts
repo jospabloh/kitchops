@@ -72,11 +72,21 @@ Deno.serve(async (req) => {
     // Anyone sitting in this tenant lands back on onboarding — one user, one
     // tenant, so there is no other restaurant to fall them back into. This
     // function has never deleted login identities.
+    // Open join requests for this business die with it, or those people could
+    // never create a business of their own (complete-onboarding blocks that
+    // while a request is pending).
+    const applicants = await sr.entities.User.filter({ pending_business_id: businessId });
+    for (const a of applicants || []) {
+      await sr.entities.User.update(a.id, { pending_business_id: null, join_requested_at: null });
+    }
+
     const members = await sr.entities.User.filter({ business_id: businessId });
     for (const member of members) {
       await sr.entities.User.update(member.id, {
         ...(member.role === "admin" ? {} : { role: "staff" }),
         business_id: null,
+        pending_business_id: null,
+        join_requested_at: null,
       });
     }
 

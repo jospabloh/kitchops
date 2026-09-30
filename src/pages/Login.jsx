@@ -9,6 +9,8 @@ import AuthLayout from "@/components/AuthLayout";
 import GoogleIcon from "@/components/GoogleIcon";
 import { safeReturnTo } from "@/lib/authReturnTo";
 import { KITCHOPS_SITE_URL, SOPORTE_EMAIL } from "@/lib/appConfig";
+import VerifyEmailStep from "@/components/VerifyEmailStep";
+import { needsEmailVerification } from "@/lib/emailVerification";
 
 // Module 10 — the "pro" bar. Three things it has to get right beyond looking
 // like the rest of the app:
@@ -30,6 +32,7 @@ import { KITCHOPS_SITE_URL, SOPORTE_EMAIL } from "@/lib/appConfig";
 function mensajeDeAuth(err) {
   const raw = String(err?.message || err?.data?.message || "").toLowerCase();
   if (!raw) return "No pudimos iniciar sesión. Revisa tu conexión e inténtalo otra vez.";
+  // (Un correo sin verificar ya no llega aquí: handleSubmit abre el paso del código.)
   if (raw.includes("invalid") || raw.includes("incorrect") || raw.includes("credential") || raw.includes("password")) {
     return "Correo o contraseña incorrectos.";
   }
@@ -56,6 +59,8 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  // Correo sin verificar: se abre el paso donde escribir el código (con reenvío).
+  const [verifying, setVerifying] = useState(false);
   // Post-login destination — the MCP OAuth consent page sends users here with
   // returnTo so the grant flow can resume. Same-origin paths only.
   const returnTo = safeReturnTo();
@@ -68,7 +73,15 @@ export default function Login() {
       await base44.auth.loginViaEmailPassword(email, password);
       window.location.href = returnTo;
     } catch (err) {
-      setError(mensajeDeAuth(err));
+      if (needsEmailVerification(err)) {
+        // Base44 ya mandó el código al registrarse, pero puede haberse perdido
+        // o vencido: pedimos uno nuevo al abrir el paso (best-effort).
+        base44.auth.resendOtp(email).catch(() => {});
+        setError("");
+        setVerifying(true);
+      } else {
+        setError(mensajeDeAuth(err));
+      }
       setLoading(false);
     }
     // No `finally`: on success the page is navigating away, and clearing the
@@ -78,6 +91,31 @@ export default function Login() {
   const handleGoogle = () => {
     base44.auth.loginWithProvider("google", returnTo);
   };
+
+  if (verifying) {
+    return (
+      <AuthLayout
+        icon={Mail}
+        title="Verifica tu correo"
+        subtitle={`Tu correo todavía no está verificado. Escribe el código de 6 dígitos que enviamos a ${email}`}
+      >
+        <VerifyEmailStep
+          email={email}
+          password={password}
+          onDone={({ needsLogin }) => {
+            if (needsLogin) {
+              setVerifying(false);
+              setError("");
+            } else {
+              window.location.href = returnTo;
+            }
+          }}
+          onCancel={() => setVerifying(false)}
+          cancelLabel="Volver"
+        />
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout
