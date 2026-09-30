@@ -6,6 +6,8 @@ import {
   lookupBusiness,
   targetBusinessOf,
   validateApproval,
+  lostAllAdmins,
+  wouldLeaveNoAdmin,
 } from "./_requests.ts";
 
 // Safe function backing Cuenta:manage_members (Module 7 member management +
@@ -126,6 +128,9 @@ Deno.serve(async (req) => {
 
     const business = await sr.entities.Business.get(member.business_id).catch(() => null);
 
+    const NO_ADMIN = { message: "El negocio no puede quedarse sin administrador." };
+    const teamOf = () => sr.entities.User.filter({ business_id: member.business_id });
+
     const audit = async (summary: string) => {
       try {
         await sr.entities.AuditLog.create({
@@ -149,7 +154,13 @@ Deno.serve(async (req) => {
       // One user, one tenant: `User.role` IS the durable record. There is no
       // second copy of it to keep in sync any more — the `Membership` entity
       // that used to hold one went away with the tenant picker.
+      if (wouldLeaveNoAdmin(await teamOf(), member, role)) return Response.json(NO_ADMIN, { status: 409 });
       const updated = await sr.entities.User.update(memberId, { role });
+      // Recount: a concurrent demotion can slip past the pre-check; undo ours.
+      if (lostAllAdmins(await teamOf(), member.role === "business_admin")) {
+        await sr.entities.User.update(memberId, { role: member.role });
+        return Response.json(NO_ADMIN, { status: 409 });
+      }
       await audit(
         `Cambió el rol de ${member.email || memberId} a ${role === "business_admin" ? "dueño/gerente" : "personal"} en ${business?.name || member.business_id}.`,
       );
@@ -160,6 +171,7 @@ Deno.serve(async (req) => {
       // Clearing `business_id` IS the removal: one user, one tenant, and no
       // separate membership record that could grant a way back in. They land
       // back on onboarding and can create or join a restaurant again.
+      if (wouldLeaveNoAdmin(await teamOf(), member, null)) return Response.json(NO_ADMIN, { status: 409 });
       const updated = await sr.entities.User.update(memberId, {
         // The platform owner keeps "admin" — writing role on that account fails,
         // and demoting them would be wrong anyway (see complete-onboarding).
@@ -167,6 +179,10 @@ Deno.serve(async (req) => {
         business_id: null,
         ...clearRequestPatch(),
       });
+      if (lostAllAdmins(await teamOf(), member.role === "business_admin")) {
+        await sr.entities.User.update(memberId, { role: member.role, business_id: member.business_id });
+        return Response.json(NO_ADMIN, { status: 409 });
+      }
       await audit(`Quitó a ${member.email || memberId} de ${business?.name || member.business_id}.`);
       return Response.json({ member: updated });
     }

@@ -133,6 +133,8 @@ import {
 import {
   isNotFoundError as isNotFoundReq,
   lookupBusiness as lookupReq,
+  lostAllAdmins,
+  wouldLeaveNoAdmin,
 } from "../functions/manage-member/_requests.ts";
 
 Deno.test("resolveCaller: un pending null guardado NO vuelve a la vista cacheada", () => {
@@ -180,4 +182,17 @@ Deno.test("lookupBusiness: vacío o 404 = missing; otro error se propaga", async
   }
   assert(threw);
   assertEquals((await lookupReq(() => Promise.resolve(undefined))).state, "missing");
+});
+
+Deno.test("last-admin guard: pre-check and recount", () => {
+  const admin = { role: "business_admin" };
+  const staff = { role: "staff" };
+  if (!wouldLeaveNoAdmin([admin, staff], admin, "staff")) throw new Error("sole admin demotion must be refused");
+  if (!wouldLeaveNoAdmin([admin, staff], admin, null)) throw new Error("sole admin removal must be refused");
+  if (wouldLeaveNoAdmin([admin, staff], staff, null)) throw new Error("staff can always go");
+  if (wouldLeaveNoAdmin([admin, admin], admin, "staff")) throw new Error("a second admin allows it");
+  if (wouldLeaveNoAdmin([admin, { role: "admin" }], admin, null)) throw new Error("platform owner counts as present");
+  if (!lostAllAdmins([staff], true)) throw new Error("recount must flag zero admins");
+  if (lostAllAdmins([staff], false)) throw new Error("only an admin-removing write is blamed");
+  if (lostAllAdmins([admin], true)) throw new Error("an admin remains");
 });
