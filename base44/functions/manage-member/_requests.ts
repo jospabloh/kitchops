@@ -83,3 +83,29 @@ export function approvalPatch(member: RequestUser, businessId: string, role: str
 export function clearRequestPatch() {
   return { pending_business_id: null, join_requested_at: null };
 }
+
+// ---- "No existe" frente a "falló" (copia de complete-onboarding/_join.ts) -----
+// Sólo un negocio confirmado como inexistente limpia la solicitud; un timeout o
+// un 5xx se propaga para que la interfaz no muestre "aprobado" sin serlo.
+
+export function isNotFoundError(error: unknown): boolean {
+  // deno-lint-ignore no-explicit-any
+  const e = error as any;
+  const status = e?.status ?? e?.statusCode ?? e?.response?.status;
+  if (status === 404) return true;
+  if (status !== undefined && status !== null) return false;
+  return /\b(not[\s_-]?found|no encontrado)\b/i.test(String(e?.message ?? ""));
+}
+
+export type BusinessLookup<T> = { state: "found"; business: T } | { state: "missing" };
+
+export async function lookupBusiness<T>(get: () => Promise<T | null | undefined>): Promise<BusinessLookup<T>> {
+  let found: T | null | undefined;
+  try {
+    found = await get();
+  } catch (error) {
+    if (isNotFoundError(error)) return { state: "missing" };
+    throw error;
+  }
+  return found ? { state: "found", business: found } : { state: "missing" };
+}

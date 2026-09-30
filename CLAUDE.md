@@ -688,3 +688,19 @@ los campos nuevos; un campo fuera del esquema desplegado se descarta en silencio
    entraría directo (comportamiento viejo) y Cuenta no vería solicitudes.
 Si algún usuario ya se unió por código antes de esto, sigue con su rol `staff`:
 no se migra nada.
+
+**Correcciones de la revisión de Codex (2026-09-30, PR #18).**
+- `complete-onboarding`: si la lectura fresca del `User` (service role) salió
+  bien, manda la fila guardada, incluido un `pending_business_id` explícitamente
+  `null` (`resolveCaller`); `auth.me()` es respaldo sólo cuando la lectura falló.
+  En `create` y `join`, si esa lectura falla o no devuelve fila, responde 503 y
+  no escribe nada (falla cerrado).
+- `status` y `approve_request`: sólo un negocio CONFIRMADO como inexistente
+  (404 o resultado vacío, `lookupBusiness`/`isNotFoundError`) limpia la
+  solicitud. Un timeout o 5xx se propaga como error y la solicitud queda
+  intacta, así la interfaz no muestra "aprobado" sin serlo. Las dos copias del
+  helper (`_join.ts`, `_requests.ts`) son idénticas a propósito (Deno aísla
+  directorios); pruebas nuevas en `join_requests_test.ts`.
+- No verificado: las funciones contra Base44 real (`entry.ts` importa
+  `npm:@base44/sdk`), ni la forma exacta del error 404 del SDK (se aceptan
+  `status`, `statusCode`, `response.status` o el mensaje "not found").

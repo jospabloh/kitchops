@@ -3,6 +3,7 @@ import {
   approvalPatch,
   canDecideRequest,
   clearRequestPatch,
+  lookupBusiness,
   targetBusinessOf,
   validateApproval,
 } from "./_requests.ts";
@@ -59,7 +60,11 @@ Deno.serve(async (req) => {
       const allowed = canDecideRequest(caller, applicant, target);
       if (!allowed.ok) return Response.json({ message: allowed.message }, { status: allowed.status });
 
-      const biz = await sr.entities.Business.get(target!).catch(() => null);
+      // Only a CONFIRMED missing business turns approve into "clear the request".
+      // Any other lookup failure propagates (outer catch, 500) so the UI never
+      // shows "approved" for something that was not.
+      const lookup = await lookupBusiness(() => sr.entities.Business.get(target!));
+      const biz = lookup.state === "found" ? lookup.business : null;
       const auditRequest = async (summary: string) => {
         try {
           await sr.entities.AuditLog.create({

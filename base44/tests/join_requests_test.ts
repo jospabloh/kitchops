@@ -123,3 +123,61 @@ Deno.test("approvalPatch: al dueño de plataforma no se le escribe role", () => 
 Deno.test("clearRequestPatch solo limpia la solicitud", () => {
   assertEquals(clearRequestPatch(), { pending_business_id: null, join_requested_at: null });
 });
+
+// ---- Codex: "no existe" frente a "falló", y la fila guardada manda -----------
+import {
+  isNotFoundError,
+  lookupBusiness,
+  resolveCaller,
+} from "../functions/complete-onboarding/_join.ts";
+import {
+  isNotFoundError as isNotFoundReq,
+  lookupBusiness as lookupReq,
+} from "../functions/manage-member/_requests.ts";
+
+Deno.test("resolveCaller: un pending null guardado NO vuelve a la vista cacheada", () => {
+  const me = resolveCaller(
+    { id: "u", pending_business_id: "b-viejo", business_id: null },
+    { pending_business_id: null, business_id: null },
+    true,
+  );
+  assertEquals(me.pending_business_id, null);
+});
+
+Deno.test("resolveCaller: si la lectura falló, auth.me() es el respaldo", () => {
+  const me = resolveCaller({ id: "u", pending_business_id: "b1" }, null, false);
+  assertEquals(me.pending_business_id, "b1");
+});
+
+Deno.test("isNotFoundError: sólo 404 confirmado; timeout y 5xx no", () => {
+  assert(isNotFoundError({ status: 404 }));
+  assert(isNotFoundError({ response: { status: 404 } }));
+  assert(isNotFoundError(new Error("Entity not found")));
+  assertFalse(isNotFoundError({ status: 500, message: "not found upstream" }));
+  assertFalse(isNotFoundError(new Error("Business no respondió en 25s.")));
+  assertFalse(isNotFoundError(null));
+  assert(isNotFoundReq({ status: 404 }));
+  assertFalse(isNotFoundReq({ status: 503 }));
+});
+
+Deno.test("lookupBusiness: vacío o 404 = missing; otro error se propaga", async () => {
+  assertEquals((await lookupBusiness(() => Promise.resolve(null))).state, "missing");
+  assertEquals((await lookupBusiness(() => Promise.reject({ status: 404 }))).state, "missing");
+  const ok = await lookupBusiness(() => Promise.resolve({ id: "b" }));
+  assertEquals(ok.state, "found");
+  let threw = false;
+  try {
+    await lookupBusiness(() => Promise.reject(new Error("timeout")));
+  } catch {
+    threw = true;
+  }
+  assert(threw);
+  threw = false;
+  try {
+    await lookupReq(() => Promise.reject({ status: 500 }));
+  } catch {
+    threw = true;
+  }
+  assert(threw);
+  assertEquals((await lookupReq(() => Promise.resolve(undefined))).state, "missing");
+});

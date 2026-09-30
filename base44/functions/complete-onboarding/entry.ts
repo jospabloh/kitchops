@@ -3,8 +3,10 @@ import {
   type JoinBusiness,
   alreadyInBusiness,
   blockCreateWhilePending,
+  lookupBusiness,
   normalizeInviteCode,
   planJoinRequest,
+  resolveCaller,
 } from "./_join.ts";
 
 // Onboarding Safe function (Modules 2 & 3): the ONLY place a user's
@@ -83,9 +85,24 @@ Deno.serve(async (req) => {
     // A pending request is read from the STORED user row, not from auth.me():
     // it is what decides whether someone may create a business, so it must not
     // depend on a cached view of the session.
-    const stored = await sr.entities.User.get(user.id).catch(() => null);
-    const pendingId: string | null = stored?.pending_business_id ?? user.pending_business_id ?? null;
-    const me = { ...user, pending_business_id: pendingId, business_id: stored?.business_id ?? user.business_id };
+    let stored: { pending_business_id?: string | null; business_id?: string | null; join_requested_at?: string | null } | null = null;
+    let readOk = true;
+    try {
+      stored = await sr.entities.User.get(user.id);
+      if (!stored) readOk = false;
+    } catch {
+      readOk = false;
+    }
+    if (!readOk && (mode === "create" || mode === "join")) {
+      // Sin la fila guardada no se puede saber si ya hay negocio o solicitud:
+      // se niega en vez de decidir con la vista cacheada.
+      return Response.json(
+        { message: "No pudimos verificar tu cuenta. Intenta de nuevo en un momento." },
+        { status: 503 },
+      );
+    }
+    const me = resolveCaller(user, stored, readOk);
+    const pendingId: string | null = me.pending_business_id ?? null;
 
     if (mode === "status" || mode === "cancel") {
       if (mode === "cancel" && pendingId) {
@@ -97,13 +114,16 @@ Deno.serve(async (req) => {
         return Response.json({ pending: false });
       }
       if (!pendingId) return Response.json({ pending: false });
-      const target = await sr.entities.Business.get(pendingId).catch(() => null);
-      if (!target) {
+      // Only a CONFIRMED missing business clears the request; a timeout or 5xx
+      // propagates as an error (outer catch) and leaves the request untouched.
+      const lookup = await lookupBusiness(() => sr.entities.Business.get(pendingId));
+      if (lookup.state === "missing") {
         // The business was deleted while the request was open: nothing to wait
         // for, and leaving it would block this person from ever creating one.
         await sr.entities.User.update(user.id, { pending_business_id: null, join_requested_at: null });
         return Response.json({ pending: false });
       }
+      const target = lookup.business;
       // Name only: never the invite code or anything else of the business.
       return Response.json({
         pending: true,
