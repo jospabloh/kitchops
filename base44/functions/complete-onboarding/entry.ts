@@ -9,6 +9,9 @@ import {
   resolveCaller,
 } from "./_join.ts";
 
+const BUILD = "2026-10-01.tenant-id.1";
+console.log(`complete-onboarding build ${BUILD}`);
+
 // Onboarding Safe function (Modules 2 & 3): the ONLY place a user's
 // role/business_id are ever set. It runs the writes as service role so it can
 // bypass the User entity's admin-only field lock on those two fields — but only
@@ -161,6 +164,10 @@ Deno.serve(async (req) => {
       });
 
       try {
+        // Business.tenant_id = id: la regla RLS sobre `id` no empareja ni para
+        // el dueño; la de `data.tenant_id` sí (ver CLAUDE.md, "Business.tenant_id").
+        await base44.asServiceRole.entities.Business.update(business.id, { tenant_id: business.id });
+        business.tenant_id = business.id;
         await withTimeout(
           base44.asServiceRole.entities.User.update(user.id, {
             ...rolePatchFor(user, "business_admin"),

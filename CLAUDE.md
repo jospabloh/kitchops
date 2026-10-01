@@ -704,3 +704,31 @@ no se migra nada.
 - No verificado: las funciones contra Base44 real (`entry.ts` importa
   `npm:@base44/sdk`), ni la forma exacta del error 404 del SDK (se aceptan
   `status`, `statusCode`, `response.status` o el mensaje "not found").
+
+## Business.tenant_id: la regla RLS sobre `id` no empareja (2026-10-01)
+
+**Causa.** `Business` tenía RLS `read`/`update` con `{"id": "{{user.data.business_id}}"}`.
+En vivo esa regla devuelve `[]` (lista) y 404 (get por id) incluso al PROPIO dueño,
+así que el código de invitación y los datos del negocio nunca se veían en
+Cuenta > Equipo y la unión por solicitud no tenía cómo compartir el código. Una
+entidad sonda mostró que una regla sobre un campo `data.<campo>` contra la misma
+plantilla `{{user.data.business_id}}` SÍ empareja.
+
+**Campo.** `Business.tenant_id` (string) = id del propio negocio. `read` y `update`
+suman la rama `{"data.tenant_id": "{{user.data.business_id}}"}` (en `update`,
+dentro de `$and` con `{"user_condition":{"role":"business_admin"}}`); se conservan
+la rama `id` y la de admin.
+
+**Candado.** `tenant_id` lleva `"rls":{"write":{"user_condition":{"role":"admin"}}}`.
+Sin él, un business_admin podría apuntarlo al id de otro negocio y leerlo. No
+quitarlo ni reenviar el esquema sin ese bloque.
+
+**Relleno.** Toda ruta que cree un `Business` debe fijar `tenant_id = business.id`
+justo después de crear, con service role y DENTRO del `try` (para que el rollback
+aplique). Hoy sólo `complete-onboarding` mode `create` (build
+`2026-10-01.tenant-id.1`). Negocios existentes: relleno único con
+`update_entities` `{"id": X}` -> `{"$set":{"tenant_id":X}}` (hecho para los 3
+existentes el 2026-10-01).
+
+**Regla de verificación.** Léelo como el dueño recién creado (cuenta nueva, crear
+restaurante, leer `entities/Business` con su token): debe devolver SOLO su negocio.
