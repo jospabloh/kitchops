@@ -109,3 +109,34 @@ export async function lookupBusiness<T>(get: () => Promise<T | null | undefined>
   }
   return found ? { state: "found", business: found } : { state: "missing" };
 }
+
+// ---- Last-admin guard (module 2) ------------------------------------------
+// A restaurant must never be left without someone who can approve requests,
+// change roles and run the danger zone. The platform owner ("admin") counts as
+// present when he is a member.
+
+export function countTenantAdmins(members: Array<{ role?: string | null }>): number {
+  return members.filter((m) => m.role === "business_admin" || m.role === "admin").length;
+}
+
+// Pre-check on a fresh read of the members, before the write. `nextRole` null
+// means removal.
+export function wouldLeaveNoAdmin(
+  members: Array<{ role?: string | null }>,
+  target: { role?: string | null },
+  nextRole: string | null,
+): boolean {
+  if (target.role !== "business_admin") return false;
+  if (nextRole === "business_admin") return false;
+  return countTenantAdmins(members) <= 1;
+}
+
+// Recount after the write: two admins changed at the same moment can each pass
+// the pre-check. True = undo your write. Only a write that took an admin away
+// can be blamed.
+export function lostAllAdmins(
+  membersAfter: Array<{ role?: string | null }>,
+  targetWasBusinessAdmin: boolean,
+): boolean {
+  return targetWasBusinessAdmin && countTenantAdmins(membersAfter) === 0;
+}
