@@ -50,6 +50,17 @@
       "default": true,
       "description": "Si el c\u00f3digo de invitaci\u00f3n acepta nuevos miembros"
     },
+    "tenant_id": {
+      "type": "string",
+      "description": "Copia del id del propio negocio (tenant_id = id). Existe porque la regla RLS sobre el campo built-in `id` con {{user.data.business_id}} no empareja y devuelve [] / 404 incluso al due\u00f1o; una regla sobre un campo data.* contra la misma plantilla s\u00ed empareja. La fija el servidor (service role) justo despu\u00e9s de crear el negocio. Bloqueado a escritura: si un business_admin pudiera editarlo, podr\u00eda apuntarlo al id de otro negocio y leerlo.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
+    },
     "billing_status": {
       "type": "string",
       "enum": [
@@ -212,6 +223,9 @@
           "id": "{{user.data.business_id}}"
         },
         {
+          "data.tenant_id": "{{user.data.business_id}}"
+        },
+        {
           "user_condition": {
             "role": "admin"
           }
@@ -224,6 +238,18 @@
           "$and": [
             {
               "id": "{{user.data.business_id}}"
+            },
+            {
+              "user_condition": {
+                "role": "business_admin"
+              }
+            }
+          ]
+        },
+        {
+          "$and": [
+            {
+              "data.tenant_id": "{{user.data.business_id}}"
             },
             {
               "user_condition": {
