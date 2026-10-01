@@ -1,104 +1,103 @@
 {
   "name": "Business",
+  "type": "object",
   "properties": {
-    "address": {
-      "description": "Direcci\u00f3n de la sucursal principal",
-      "type": "string"
+    "name": {
+      "type": "string",
+      "description": "Nombre del negocio / restaurante"
     },
-    "auto_renewal": {
-      "default": false,
-      "description": "Renovaci\u00f3n autom\u00e1tica de la licencia Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
+    "legal_name": {
+      "type": "string",
+      "description": "Raz\u00f3n social"
+    },
+    "rfc": {
+      "type": "string",
+      "description": "RFC del negocio"
+    },
+    "phone": {
+      "type": "string",
+      "description": "Tel\u00e9fono de contacto"
+    },
+    "address": {
+      "type": "string",
+      "description": "Direcci\u00f3n de la sucursal principal"
+    },
+    "logo_url": {
+      "type": "string",
+      "description": "URL del logotipo del negocio"
+    },
+    "currency": {
+      "type": "string",
+      "default": "MXN",
+      "description": "Moneda de operaci\u00f3n"
+    },
+    "tax_rate": {
+      "type": "number",
+      "default": 16,
+      "description": "Tasa de IVA aplicable (%)"
+    },
+    "timezone": {
+      "type": "string",
+      "default": "America/Mexico_City",
+      "description": "Zona horaria para cortes semanales y alertas"
+    },
+    "invite_code": {
+      "type": "string",
+      "description": "C\u00f3digo \u00fanico de invitaci\u00f3n para que el equipo se una"
+    },
+    "invite_code_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Si el c\u00f3digo de invitaci\u00f3n acepta nuevos miembros"
+    },
+    "tenant_id": {
+      "type": "string",
+      "description": "Copia del id del propio negocio (tenant_id = id). Existe porque la regla RLS sobre el campo built-in `id` con {{user.data.business_id}} no empareja y devuelve [] / 404 incluso al due\u00f1o; una regla sobre un campo data.* contra la misma plantilla s\u00ed empareja. La fija el servidor (service role) justo despu\u00e9s de crear el negocio. Bloqueado a escritura: si un business_admin pudiera editarlo, podr\u00eda apuntarlo al id de otro negocio y leerlo.",
       "rls": {
         "write": {
           "user_condition": {
             "role": "admin"
           }
         }
-      },
-      "type": "boolean"
+      }
     },
     "billing_status": {
-      "default": "trial",
-      "description": "Estado de licencia. LO ESCRIBE \u00daNICAMENTE el cron unificado de ACACIA Mission Control; esta app solo lo lee para degradar la UI. Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
+      "type": "string",
       "enum": [
         "trial",
         "active",
         "view_only",
         "suspended"
       ],
+      "default": "trial",
+      "description": "Estado de licencia. LO ESCRIBE \u00daNICAMENTE el cron unificado de ACACIA Mission Control; esta app solo lo lee para degradar la UI. Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
       "rls": {
         "write": {
           "user_condition": {
             "role": "admin"
           }
         }
-      },
-      "type": "string"
-    },
-    "currency": {
-      "default": "MXN",
-      "description": "Moneda de operaci\u00f3n",
-      "type": "string"
-    },
-    "deletion_requested_by": {
-      "description": "Email de quien solicit\u00f3 la eliminaci\u00f3n de la cuenta",
-      "type": "string"
-    },
-    "invite_code": {
-      "description": "C\u00f3digo \u00fanico de invitaci\u00f3n para que el equipo se una",
-      "type": "string"
-    },
-    "invite_code_active": {
-      "default": true,
-      "description": "Si el c\u00f3digo de invitaci\u00f3n acepta nuevos miembros",
-      "type": "boolean"
-    },
-    "legal_name": {
-      "description": "Raz\u00f3n social",
-      "type": "string"
-    },
-    "license_activated_at": {
-      "description": "Fecha de activaci\u00f3n de la licencia Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
-      "format": "date-time",
-      "rls": {
-        "write": {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      },
-      "type": "string"
-    },
-    "license_expires_at": {
-      "description": "Fin del periodo actual de facturaci\u00f3n Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
-      "format": "date-time",
-      "rls": {
-        "write": {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      },
-      "type": "string"
+      }
     },
     "license_plan": {
-      "default": "start",
-      "description": "Plan contratado Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
+      "type": "string",
       "enum": [
         "start",
         "growth",
         "pro"
       ],
+      "default": "start",
+      "description": "Plan contratado Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
       "rls": {
         "write": {
           "user_condition": {
             "role": "admin"
           }
         }
-      },
-      "type": "string"
+      }
     },
     "licensed_user_limit": {
+      "type": "number",
       "default": 4,
       "description": "N\u00famero de usuarios incluidos en el plan Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
       "rls": {
@@ -107,18 +106,70 @@
             "role": "admin"
           }
         }
-      },
-      "type": "number"
+      }
     },
-    "logo_url": {
-      "description": "URL del logotipo del negocio",
-      "type": "string"
+    "trial_start_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Inicio del periodo de prueba Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
-    "name": {
-      "description": "Nombre del negocio / restaurante",
-      "type": "string"
+    "trial_end_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Fin del periodo de prueba Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
+    },
+    "license_activated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Fecha de activaci\u00f3n de la licencia Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
+    },
+    "license_expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Fin del periodo actual de facturaci\u00f3n Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
+    },
+    "view_only_since": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Fecha en que el negocio entr\u00f3 en modo solo lectura Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
     "payment_reference": {
+      "type": "string",
       "description": "Referencia del \u00faltimo pago (Mercado Pago) Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
       "rls": {
         "write": {
@@ -126,85 +177,35 @@
             "role": "admin"
           }
         }
-      },
-      "type": "string"
+      }
     },
-    "phone": {
-      "description": "Tel\u00e9fono de contacto",
-      "type": "string"
-    },
-    "rfc": {
-      "description": "RFC del negocio",
-      "type": "string"
+    "auto_renewal": {
+      "type": "boolean",
+      "default": false,
+      "description": "Renovaci\u00f3n autom\u00e1tica de la licencia Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
     "scheduled_delete_at": {
+      "type": "string",
+      "format": "date-time",
       "description": "Fecha programada de eliminaci\u00f3n permanente (zona de peligro) Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
-      "format": "date-time",
       "rls": {
         "write": {
           "user_condition": {
             "role": "admin"
           }
         }
-      },
-      "type": "string"
+      }
     },
-    "tax_rate": {
-      "default": 16,
-      "description": "Tasa de IVA aplicable (%)",
-      "type": "number"
-    },
-    "tenant_id": {
-      "description": "Copia del id del propio negocio (tenant_id = id). Existe porque la regla RLS sobre el campo built-in `id` con {{user.data.business_id}} no empareja y devuelve [] / 404 incluso al due\u00f1o; una regla sobre un campo data.* contra la misma plantilla s\u00ed empareja. La fija el servidor (service role) justo despu\u00e9s de crear el negocio. Bloqueado a escritura: si un business_admin pudiera editarlo, podr\u00eda apuntarlo al id de otro negocio y leerlo.",
-      "rls": {
-        "write": {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      },
-      "type": "string"
-    },
-    "timezone": {
-      "default": "America/Mexico_City",
-      "description": "Zona horaria para cortes semanales y alertas",
-      "type": "string"
-    },
-    "trial_end_at": {
-      "description": "Fin del periodo de prueba Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
-      "format": "date-time",
-      "rls": {
-        "write": {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      },
-      "type": "string"
-    },
-    "trial_start_at": {
-      "description": "Inicio del periodo de prueba Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
-      "format": "date-time",
-      "rls": {
-        "write": {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      },
-      "type": "string"
-    },
-    "view_only_since": {
-      "description": "Fecha en que el negocio entr\u00f3 en modo solo lectura Bloqueado a escritura (Modulo 1): solo el rol de servicio o la plataforma lo escriben; si un business_admin pudiera editarlo por SDK se daria licencia a si mismo.",
-      "format": "date-time",
-      "rls": {
-        "write": {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      },
-      "type": "string"
+    "deletion_requested_by": {
+      "type": "string",
+      "description": "Email de quien solicit\u00f3 la eliminaci\u00f3n de la cuenta"
     }
   },
   "required": [
@@ -212,11 +213,6 @@
   ],
   "rls": {
     "create": {
-      "user_condition": {
-        "role": "admin"
-      }
-    },
-    "delete": {
       "user_condition": {
         "role": "admin"
       }
@@ -268,7 +264,11 @@
           }
         }
       ]
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
     }
-  },
-  "type": "object"
+  }
 }
