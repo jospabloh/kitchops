@@ -241,7 +241,11 @@ export default function Layout() {
             {banner.texto}
           </div>
         )}
-        <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
+        {/* The bottom padding keeps the last row's controls (delete, edit) clear of
+            the corner theme switcher, which is fixed bottom-right at every
+            width: without it, the last row's button sits under the switcher
+            at the end of the page and a tap lands on the theme track. */}
+        <div className="mx-auto max-w-6xl p-4 pb-24 sm:p-6 sm:pb-24 lg:p-8 lg:pb-24">
           <Outlet />
         </div>
       </main>
