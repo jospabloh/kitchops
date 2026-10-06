@@ -11,7 +11,7 @@ import { LogoWordmark } from "@/components/Logo";
 export default function AuthLayout({ icon: Icon, title, subtitle = null, footer = null, children }) {
   return (
     <div className="min-h-screen bg-carbon text-chalk lg:grid lg:grid-cols-[1fr_1.1fr]">
-      <div className="flex min-h-screen flex-col px-6 py-8 lg:min-h-0 lg:px-12">
+      <div className="flex min-h-screen flex-col px-6 pb-20 pt-8 lg:min-h-0 lg:px-12">
         <LogoWordmark size={34} />
 
         <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center py-10">
