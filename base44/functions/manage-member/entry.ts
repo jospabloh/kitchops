@@ -6,6 +6,7 @@ import {
   lookupBusiness,
   targetBusinessOf,
   validateApproval,
+  isAdminRole,
   lostAllAdmins,
   wouldLeaveNoAdmin,
 } from "./_requests.ts";
@@ -157,7 +158,7 @@ Deno.serve(async (req) => {
       if (wouldLeaveNoAdmin(await teamOf(), member, role)) return Response.json(NO_ADMIN, { status: 409 });
       const updated = await sr.entities.User.update(memberId, { role });
       // Recount: a concurrent demotion can slip past the pre-check; undo ours.
-      if (lostAllAdmins(await teamOf(), member.role === "business_admin")) {
+      if (lostAllAdmins(await teamOf(), isAdminRole(member.role))) {
         await sr.entities.User.update(memberId, { role: member.role });
         return Response.json(NO_ADMIN, { status: 409 });
       }
@@ -179,7 +180,7 @@ Deno.serve(async (req) => {
         business_id: null,
         ...clearRequestPatch(),
       });
-      if (lostAllAdmins(await teamOf(), member.role === "business_admin")) {
+      if (lostAllAdmins(await teamOf(), isAdminRole(member.role))) {
         await sr.entities.User.update(memberId, { role: member.role, business_id: member.business_id });
         return Response.json(NO_ADMIN, { status: 409 });
       }
