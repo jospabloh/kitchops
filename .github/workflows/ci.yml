@@ -64,7 +64,7 @@ jobs:
       # registry outage. `deno test` type-checks as it goes, which is what
       # covers _permissions.ts and _providers.ts.
       - name: Tests
-        run: deno test --allow-env base44/tests/
+        run: deno test --allow-env --allow-read base44/tests/
 
       # The SDK-free shared modules, checked explicitly. The full entry points
       # can't be checked here because they import npm:@base44/sdk, which is
