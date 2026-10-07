@@ -264,7 +264,7 @@ export default function Onboarding() {
 
       {creando && (
         <p className="mt-5 text-xs leading-relaxed text-slate-dim">
-          Empiezas con 14 días de prueba, sin tarjeta.
+          Empiezas con 30 días de prueba, sin tarjeta.
         </p>
       )}
     </AuthLayout>

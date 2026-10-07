@@ -25,9 +25,9 @@ export const CHANGELOG = [
     version: "0.1.0",
     date: "2026-08-19",
     notes: [
-      "Primer lanzamiento multi-negocio: cada restaurante tiene sus propios gastos, cortes, inventario y alertas, aislados entre sí. Puedes pertenecer a varios y cambiar entre ellos.",
+      "Primer lanzamiento: cada restaurante tiene sus propios gastos, cortes, inventario y alertas, aislados entre sí.",
       "Asistente de WhatsApp: registra gastos (incluso desde la foto de un ticket), ajusta inventario y consulta cómo va la semana, desde el celular.",
-      "Permisos por persona: define qué puede ver y hacer el personal de cocina, aparte de lo que hace el dueño.",
+      "Permisos por rol: define qué puede ver y hacer el personal de cocina, aparte de lo que hace el dueño.",
       "Bitácora: queda registrado quién hizo cada movimiento, incluso los que entraron por WhatsApp.",
       "Cuenta y zona de peligro: miembros, código de invitación, exportar datos y eliminar el negocio.",
       "Soporte y sugerencias desde la app.",
