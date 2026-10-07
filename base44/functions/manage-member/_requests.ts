@@ -115,8 +115,14 @@ export async function lookupBusiness<T>(get: () => Promise<T | null | undefined>
 // change roles and run the danger zone. The platform owner ("admin") counts as
 // present when he is a member.
 
+// "admin" is the platform tier: a platform owner who is the only member of a
+// tenant is its administrator too, so removing him leaves no one.
+export function isAdminRole(role: string | null | undefined): boolean {
+  return role === "business_admin" || role === "admin";
+}
+
 export function countTenantAdmins(members: Array<{ role?: string | null }>): number {
-  return members.filter((m) => m.role === "business_admin" || m.role === "admin").length;
+  return members.filter((m) => isAdminRole(m.role)).length;
 }
 
 // Pre-check on a fresh read of the members, before the write. `nextRole` null
@@ -126,8 +132,8 @@ export function wouldLeaveNoAdmin(
   target: { role?: string | null },
   nextRole: string | null,
 ): boolean {
-  if (target.role !== "business_admin") return false;
-  if (nextRole === "business_admin") return false;
+  if (!isAdminRole(target.role)) return false;
+  if (isAdminRole(nextRole)) return false;
   return countTenantAdmins(members) <= 1;
 }
 

@@ -192,6 +192,9 @@ Deno.test("last-admin guard: pre-check and recount", () => {
   if (wouldLeaveNoAdmin([admin, staff], staff, null)) throw new Error("staff can always go");
   if (wouldLeaveNoAdmin([admin, admin], admin, "staff")) throw new Error("a second admin allows it");
   if (wouldLeaveNoAdmin([admin, { role: "admin" }], admin, null)) throw new Error("platform owner counts as present");
+  const platform = { role: "admin" };
+  if (!wouldLeaveNoAdmin([platform, staff], platform, null)) throw new Error("sole platform admin removal must be refused");
+  if (wouldLeaveNoAdmin([platform, admin], platform, null)) throw new Error("a tenant admin remains");
   if (!lostAllAdmins([staff], true)) throw new Error("recount must flag zero admins");
   if (lostAllAdmins([staff], false)) throw new Error("only an admin-removing write is blamed");
   if (lostAllAdmins([admin], true)) throw new Error("an admin remains");
