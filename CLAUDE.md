@@ -18,7 +18,7 @@ npm run build                     # must pass
 npm run release -- patch          # stamps APP_VERSION/RELEASE_DATE
 
 deno lint
-deno test --allow-env base44/tests/
+deno test --allow-env --allow-read base44/tests/
 ```
 
 ## The three things that will bite you
@@ -547,7 +547,7 @@ puesto y no lo es— y afirma lo que este módulo promete: un cuerpo firmado por
 una app que dice ser otra **no** verifica. No tiene imports externos ni toca la
 red, así que corre en un sandbox donde `jsr.io` y `deno.land` están bloqueados.
 El test canónico está en el repo estándar. Aquí `deno lint base44/functions/`
-y `deno test --allow-env base44/tests/` sí corren en CI (28/28).
+y `deno test --allow-env --allow-read base44/tests/` sí corren en CI (28/28).
 
 **La criptografía en línea que esto reemplaza ya no está.** Cada `acaciaControl`
 llevaba su propio `stableStringify` / `hmacHex` / `timingSafeEqual`, copiados a
@@ -732,3 +732,14 @@ existentes el 2026-10-01).
 
 **Regla de verificación.** Léelo como el dueño recién creado (cuenta nueva, crear
 restaurante, leer `entities/Business` con su token): debe devolver SOLO su negocio.
+
+## Prueba de 30 días (2026-10-07)
+
+El estándar del portafolio (Módulo 1) fija la prueba en **30 días naturales** para
+toda app. `TRIAL_DAYS` en `complete-onboarding/entry.ts` pasó de 14 a 30 (build
+`2026-10-07.trial-30.1`) y el texto de `Onboarding.jsx` lo anuncia. Aplica sólo a
+negocios **nuevos**: los existentes conservan su `trial_end_at`, no se migra nada
+(si hace falta alargar uno, es `set_dates` desde Mission Control).
+`base44/tests/trial_days_test.ts` fija ambos. Para que surta efecto: desplegar la
+función `complete-onboarding` y publicar el sitio. Verificar en vivo con un negocio
+nuevo: `trial_end_at - trial_start_at` debe ser 30 días.

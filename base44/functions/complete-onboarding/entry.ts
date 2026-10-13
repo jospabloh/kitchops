@@ -9,7 +9,7 @@ import {
   resolveCaller,
 } from "./_join.ts";
 
-const BUILD = "2026-10-01.tenant-id.1";
+const BUILD = "2026-10-07.trial-30.1";
 console.log(`complete-onboarding build ${BUILD}`);
 
 // Onboarding Safe function (Modules 2 & 3): the ONLY place a user's
@@ -74,7 +74,10 @@ function randomInviteCode() {
   return code;
 }
 
-const TRIAL_DAYS = 14;
+// Portfolio standard (acacia-app-standard, Module 1): every app's trial is
+// exactly 30 calendar days. Applies to NEW tenants only; businesses created
+// before this change keep the trial_end_at they already have (no migration).
+const TRIAL_DAYS = 30;
 
 Deno.serve(async (req) => {
   try {
