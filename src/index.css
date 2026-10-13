@@ -389,3 +389,11 @@
   --theme-switcher-bottom: 1rem;
   --theme-switcher-right: 1rem;
 }
+
+/* Aviso de nueva versión (src/components/UpdateBanner.jsx) — sólo la posición.
+   Bajo 1024px la barra superior fija de Layout.jsx (logo y botón de menú) mide
+   h-14 = 3.5rem: el aviso baja a 4rem para quedar debajo de ella, con aire, en
+   vez de tapar el botón de menú. En escritorio no hay barra superior. */
+@media (max-width: 1023px) {
+  :root { --update-banner-top: 4rem; }
+}

@@ -1,6 +1,7 @@
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
+import UpdateBanner from "@/components/UpdateBanner";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClientInstance } from "@/lib/query-client";
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
@@ -117,6 +118,7 @@ function App() {
               reachable from the login screen and the 404 too, not only from the
               authenticated shell. */}
           <ThemeSwitcher />
+          <UpdateBanner />
         </QueryClientProvider>
       </AuthProvider>
     </ThemeProvider>
