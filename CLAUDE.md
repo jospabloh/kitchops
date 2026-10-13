@@ -700,9 +700,15 @@ no se migra nada.
 
 **Desplegado (comprobado el 2026-10-13).** `list_entity_schemas` muestra en `User`
 `pending_business_id` y `join_requested_at` con `rls.write` de admin y sin bloque
-`rls` de entidad. Un `npm run deploy` de ese día reportó `manage-member` y
-`delete-account` como `unchanged`, o sea que el código desplegado ya era el de
-`main`. Sigue sin verificar una sesión real de solicitante y dueño aprobando.
+`rls` de entidad. `manage-member` y `delete-account` están **vivos**: un POST sin
+sesión al subdominio de la app responde `500 "Authentication required to view
+users"`, igual que `complete-onboarding` recién desplegado ese día (una función
+que nunca se desplegó da 404). Ese 500 es el SDK rechazando `auth.me()` sin
+sesión, o sea que el bundle cargó y corrió; **no** es el 500 de un bundle que no
+carga que describe `AGENTS.md`. Que el código vivo sea el de `main` sólo se
+**infiere** del `unchanged` del `npm run deploy`: sin sesión no hay forma de
+distinguir versión. Sigue sin verificar una sesión real de solicitante y dueño
+aprobando, que es la única prueba de comportamiento.
 
 **Correcciones de la revisión de Codex (2026-09-30, PR #18).**
 - `complete-onboarding`: si la lectura fresca del `User` (service role) salió
