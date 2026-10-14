@@ -1,0 +1,57 @@
+{
+  "name": "manage-member",
+  "purpose": "Equipo del restaurante (Cuenta > Equipo): cambiar rol, quitar miembros y decidir solicitudes de unión. Único camino que escribe business_id a quien entra con código.",
+  "status": "active",
+  "created": "2026-08-19",
+  "triggers": [
+    "frontend"
+  ],
+  "auth": "user",
+  "tenant_scoped": true,
+  "entities": {
+    "reads": [
+      "Business",
+      "User"
+    ],
+    "writes": [
+      "AuditLog",
+      "User"
+    ]
+  },
+  "tests": [
+    "base44/tests/join_requests_test.ts"
+  ],
+  "actions": {
+    "list_requests": {
+      "purpose": "Lista las solicitudes pendientes del negocio (sólo email, nombre y fecha).",
+      "callers": [
+        "src/pages/Cuenta.jsx"
+      ]
+    },
+    "approve_request": {
+      "purpose": "Aprueba una solicitud con rol business_admin o staff (nunca admin).",
+      "callers": [
+        "src/pages/Cuenta.jsx"
+      ]
+    },
+    "reject_request": {
+      "purpose": "Rechaza una solicitud y la limpia.",
+      "callers": [
+        "src/pages/Cuenta.jsx"
+      ]
+    },
+    "change_role": {
+      "purpose": "Cambia el rol de un miembro sin dejar el negocio sin business_admin.",
+      "callers": [
+        "src/pages/Cuenta.jsx"
+      ]
+    },
+    "remove": {
+      "purpose": "Quita a un miembro: limpiar su business_id es la baja.",
+      "callers": [
+        "src/pages/Cuenta.jsx"
+      ]
+    }
+  },
+  "remove_when": null
+}

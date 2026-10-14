@@ -772,3 +772,72 @@ nuevo: `trial_end_at - trial_start_at` debe ser 30 días.
 el bundle servido trae "Empiezas con 30 días de prueba, sin tarjeta." y ninguna
 mención a 14 días. **No verificado:** el alta real de un negocio nuevo (necesita
 una cuenta nueva), que es lo único que prueba que la función que corre es la nueva.
+
+## Módulo 26 — cada función dice para qué existe (2026-10-14)
+
+Cada directorio de `base44/functions/` con `entry.ts` lleva un
+`function.meta.json` al lado: propósito, estado, triggers, auth, si filtra por
+inquilino, entidades que lee y escribe, pruebas, y una entrada por acción con
+sus `callers`. No cuenta contra el tope de funciones (sólo cuenta `entry.*`).
+`docs/FUNCTIONS_REGISTRY.md` es el índice legible y **se genera**, no se edita.
+
+```bash
+npm run validate:function-meta       # dentro de npm run lint y de CI
+npm run generate:function-registry   # reescribe docs/FUNCTIONS_REGISTRY.md
+```
+
+El validador (`scripts/validate-function-meta.mjs`, con la lógica pura en
+`scripts/lib/function-meta.mjs` y probada en `base44/tests/function_meta_test.ts`)
+contrasta el meta con el código, no sólo su forma:
+
+- **Acciones.** En un router, las llaves de `HANDLERS` en `handlers/index.ts`;
+  en `complete-onboarding`, `manage-member` y `acaciaControl`, los `mode ===` /
+  `action ===` / `case` que leen del cuerpo. Una función sin despacho declara
+  una sola acción, `default`. Falta una o sobra una: falla.
+- **Callers, en las dos direcciones.** Busca `functions.invoke("<fn>", { action
+  | mode })` en `src/`, `base44/functions/`, `base44/workflows/` y
+  `base44/agents/`. Un caller sin declarar falla, y uno declarado que ya no
+  llama también. Cuando el valor viaja en una variable (`mode: modo` en
+  `Onboarding.jsx`), cuenta cada acción declarada que aparece como literal en
+  ese archivo. Los de fuera del repo se escriben `external:<sistema>[:<dónde>]`
+  y sólo se revisa su forma: Mission Control llama a `acaciaControl` (la ruta
+  de cada acción en MC está en su meta), Zernio y Meta a `whatsapp`.
+- **`cron:` exige un workflow en `base44/workflows/`**, que es lo que habría
+  atrapado los cinco crons sin programador de StockFlow. Y `one-off` /
+  `deprecated` exigen `remove_when`, y una fecha vencida falla.
+- **Avisa, sin fallar,** de una función activa sin ningún trigger y de una
+  acción sin callers. El estándar no lo prohíbe; lo que no permite es que sea
+  invisible.
+
+Al cambiar un caller, una acción o una función: edita el meta, corre
+`npm run generate:function-registry` y haz commit de los dos.
+
+**Lo que este primer inventario encontró** (la salida de los avisos):
+
+- **`generarAlertas` no lo programa nada.** Su cabecera dice "nightly sweep" y
+  `CLAUDE.md` lo trata como el barrido de alertas, pero medido el 2026-10-14
+  `npx base44 functions list` no le muestra automatización, no existe
+  `base44/workflows/` y Mission Control no lo llama. Las alertas sólo se generan
+  cuando alguien pulsa "Recalcular" en Alertas (`alertas` → `generarAlertasSafe`,
+  sólo para su propio negocio). Su meta lo dice así, con `triggers: []`.
+  **Decisión pendiente, de una persona:** programarlo (un workflow en
+  `base44/workflows/` y un trigger `cron:` que lo nombre, o un cron en Mission
+  Control con la llave derivada) o retirarlo. No se inventó un workflow.
+- **`health` tampoco tiene quien la llame.** Mission Control sondea con
+  `acaciaControl` → `ping` (`api/_lib/sync/syncHealth.js`), no con esta
+  función, y no apareció ningún monitor externo. Misma decisión pendiente.
+- **`ingresos` → `conciliarIngresoSafe` no tiene caller desde que se creó**
+  (2026-08-19): `Ingresos.jsx` concilia por `updateIngresoSafe`, que exige
+  `Ingresos:conciliar` cuando se tocan los campos de depósito.
+- **`acaciaControl` → `emails.status`** existe porque el puente es el mismo
+  archivo en todo el portafolio, pero Mission Control no configura `email_log`
+  para KitchOps, así que aquí nunca se llama.
+
+Ninguna se borró. Borrar una función pide, por escrito en el PR, que el meta no
+muestre callers, que los workflows **desplegados** no la disparen y siete días
+de logs capturados sin invocaciones (Base44 guarda unas 13 horas).
+
+**Sin verificar:** que `base44 functions list` siga siendo igual a los 16
+directorios con meta después del próximo deploy (lo era el 2026-10-14), y los
+callers de Mission Control, que se leyeron de `origin/main` de ese repo a la
+misma fecha y nada aquí comprueba.

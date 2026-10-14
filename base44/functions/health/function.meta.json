@@ -1,0 +1,23 @@
+{
+  "name": "health",
+  "purpose": "Sonda de salud del Módulo 5: un viaje real al almacén de entidades, con el bearer derivado de la app en x-health-secret. Mission Control NO la usa (sondea con acaciaControl.ping, ver api/_lib/sync/syncHealth.js) y no se encontró ningún monitor externo que la llame: está para una persona o un monitor que todavía no existe.",
+  "status": "active",
+  "created": "2026-08-19",
+  "triggers": [],
+  "auth": "hmac",
+  "tenant_scoped": false,
+  "entities": {
+    "reads": [
+      "Business"
+    ],
+    "writes": []
+  },
+  "tests": [],
+  "actions": {
+    "default": {
+      "purpose": "Lee un Business y devuelve status/latency_ms; 503 si el almacén no responde.",
+      "callers": []
+    }
+  },
+  "remove_when": null
+}

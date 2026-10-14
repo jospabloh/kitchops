@@ -1,0 +1,33 @@
+{
+  "name": "permisos",
+  "purpose": "Router del perfil de permisos del personal (PermissionProfile).",
+  "status": "active",
+  "created": "2026-08-19",
+  "triggers": [
+    "frontend"
+  ],
+  "auth": "user",
+  "tenant_scoped": true,
+  "entities": {
+    "reads": [
+      "Business",
+      "PermissionProfile"
+    ],
+    "writes": [
+      "AuditLog",
+      "PermissionProfile"
+    ]
+  },
+  "tests": [
+    "base44/tests/permissions_test.ts"
+  ],
+  "actions": {
+    "savePermissionProfileSafe": {
+      "purpose": "Guarda los overrides de permisos del staff; sólo llaves conocidas (Cuenta:manage_members).",
+      "callers": [
+        "src/pages/Permisos.jsx"
+      ]
+    }
+  },
+  "remove_when": null
+}

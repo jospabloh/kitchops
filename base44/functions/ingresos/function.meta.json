@@ -1,0 +1,50 @@
+{
+  "name": "ingresos",
+  "purpose": "Router de escritura de cortes de plataformas (IngresoPlataforma); la conciliación del depósito exige Ingresos:conciliar.",
+  "status": "active",
+  "created": "2026-08-19",
+  "triggers": [
+    "frontend"
+  ],
+  "auth": "user",
+  "tenant_scoped": true,
+  "entities": {
+    "reads": [
+      "Business",
+      "IngresoPlataforma",
+      "PermissionProfile"
+    ],
+    "writes": [
+      "AuditLog",
+      "IngresoPlataforma"
+    ]
+  },
+  "tests": [
+    "base44/tests/permissions_test.ts"
+  ],
+  "actions": {
+    "createIngresoSafe": {
+      "purpose": "Registra un corte (Ingresos:create).",
+      "callers": [
+        "src/pages/Ingresos.jsx"
+      ]
+    },
+    "updateIngresoSafe": {
+      "purpose": "Edita un corte; tocar los campos de depósito exige además Ingresos:conciliar.",
+      "callers": [
+        "src/pages/Ingresos.jsx"
+      ]
+    },
+    "conciliarIngresoSafe": {
+      "purpose": "Acción estrecha \"me depositaron X\" con su propia línea de auditoría (Ingresos:conciliar). Sin caller desde que se creó (2026-08-19): la pantalla concilia por updateIngresoSafe.",
+      "callers": []
+    },
+    "deleteIngresoSafe": {
+      "purpose": "Borra un corte (Ingresos:delete).",
+      "callers": [
+        "src/pages/Ingresos.jsx"
+      ]
+    }
+  },
+  "remove_when": null
+}

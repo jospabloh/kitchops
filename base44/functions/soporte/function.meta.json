@@ -1,0 +1,47 @@
+{
+  "name": "soporte",
+  "purpose": "Router de soporte del lado del inquilino (Módulo 8): el ticket se escribe aquí primero y Mission Control lo trae por acaciaControl.",
+  "status": "active",
+  "created": "2026-08-19",
+  "triggers": [
+    "frontend"
+  ],
+  "auth": "user",
+  "tenant_scoped": true,
+  "entities": {
+    "reads": [
+      "Business",
+      "PermissionProfile",
+      "SupportTicket"
+    ],
+    "writes": [
+      "AuditLog",
+      "SupportTicket",
+      "SupportTicketMessage"
+    ]
+  },
+  "tests": [
+    "base44/tests/permissions_test.ts"
+  ],
+  "actions": {
+    "createTicketSafe": {
+      "purpose": "Crea el ticket y su primer mensaje (Soporte:create). Soporte.jsx avisa después a Mission Control por ticket-pull.",
+      "callers": [
+        "src/pages/Soporte.jsx"
+      ]
+    },
+    "replyTicketSafe": {
+      "purpose": "Respuesta del inquilino; author_role fijo a tenant.",
+      "callers": [
+        "src/pages/Soporte.jsx"
+      ]
+    },
+    "markThreadReadSafe": {
+      "purpose": "Limpia la marca de \"hay respuesta\" al abrir el hilo.",
+      "callers": [
+        "src/pages/Soporte.jsx"
+      ]
+    }
+  },
+  "remove_when": null
+}

@@ -1,0 +1,30 @@
+{
+  "name": "generarAlertas",
+  "purpose": "Barrido \"nocturno\" de alertas para TODOS los restaurantes, cada uno aislado y con sus umbrales; salta los suspendidos. PERO NADA LO PROGRAMA: medido el 2026-10-14, `base44 functions list` no le muestra automatización, no hay workflow en base44/workflows/ y Mission Control no lo llama. Hoy las alertas sólo se generan con el botón \"Recalcular\" (alertas.generarAlertasSafe). Decisión pendiente: programarlo o retirarlo.",
+  "status": "active",
+  "created": "2026-08-18",
+  "triggers": [],
+  "auth": "hmac",
+  "tenant_scoped": true,
+  "entities": {
+    "reads": [
+      "Alerta",
+      "AppSettings",
+      "Business",
+      "Gasto",
+      "IngresoPlataforma",
+      "InventarioItem"
+    ],
+    "writes": [
+      "Alerta"
+    ]
+  },
+  "tests": [],
+  "actions": {
+    "default": {
+      "purpose": "Recorre los Business y persiste las alertas nuevas de cada uno. Exige el bearer derivado (x-cron-secret o x-health-secret).",
+      "callers": []
+    }
+  },
+  "remove_when": null
+}

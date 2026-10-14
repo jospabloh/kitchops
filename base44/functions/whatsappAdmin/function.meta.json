@@ -1,0 +1,47 @@
+{
+  "name": "whatsappAdmin",
+  "purpose": "Router de la configuración del agente de WhatsApp de cada restaurante: proveedor, números autorizados y mensaje de prueba.",
+  "status": "active",
+  "created": "2026-08-19",
+  "triggers": [
+    "frontend"
+  ],
+  "auth": "user",
+  "tenant_scoped": true,
+  "entities": {
+    "reads": [
+      "Business",
+      "PermissionProfile",
+      "WhatsAppConfig",
+      "WhatsAppConversacion"
+    ],
+    "writes": [
+      "AuditLog",
+      "WhatsAppConfig"
+    ]
+  },
+  "tests": [
+    "base44/tests/permissions_test.ts"
+  ],
+  "actions": {
+    "saveConfigSafe": {
+      "purpose": "Crea o actualiza WhatsAppConfig; rechaza un id de cuenta que ya reclama otro negocio (WhatsApp:configure).",
+      "callers": [
+        "src/pages/WhatsApp.jsx"
+      ]
+    },
+    "saveNumerosSafe": {
+      "purpose": "Guarda la lista de teléfonos autorizados y su rol (WhatsApp:manage_numbers).",
+      "callers": [
+        "src/pages/WhatsApp.jsx"
+      ]
+    },
+    "sendTestSafe": {
+      "purpose": "Envía un mensaje de prueba a un número que ya está en la lista (WhatsApp:configure).",
+      "callers": [
+        "src/pages/WhatsApp.jsx"
+      ]
+    }
+  },
+  "remove_when": null
+}

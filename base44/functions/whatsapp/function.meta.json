@@ -1,0 +1,50 @@
+{
+  "name": "whatsapp",
+  "purpose": "Webhook entrante del agente de WhatsApp: el único endpoint público. Verifica la firma del proveedor antes de leer, responde 2xx de inmediato, reclama el id del evento y resuelve el inquilino por WhatsAppConfig; luego registra gastos, cortes y stock con los mismos permisos que la app.",
+  "status": "active",
+  "created": "2026-08-19",
+  "triggers": [
+    "external:zernio",
+    "external:meta"
+  ],
+  "auth": "hmac",
+  "tenant_scoped": true,
+  "entities": {
+    "reads": [
+      "Alerta",
+      "Business",
+      "Gasto",
+      "IngresoPlataforma",
+      "InventarioItem",
+      "PermissionProfile",
+      "WhatsAppConfig",
+      "WhatsAppConversacion",
+      "WhatsAppEvento",
+      "WhatsAppMensaje"
+    ],
+    "writes": [
+      "AuditLog",
+      "Gasto",
+      "IngresoPlataforma",
+      "InventarioItem",
+      "WhatsAppConfig",
+      "WhatsAppConversacion",
+      "WhatsAppEvento",
+      "WhatsAppMensaje"
+    ]
+  },
+  "tests": [
+    "base44/tests/whatsapp_test.ts",
+    "base44/tests/permissions_test.ts"
+  ],
+  "actions": {
+    "default": {
+      "purpose": "Un mensaje entrante del proveedor que ese restaurante eligió en WhatsAppConfig (Zernio o Meta Cloud API); el GET de verificación de Meta también entra aquí.",
+      "callers": [
+        "external:zernio",
+        "external:meta"
+      ]
+    }
+  },
+  "remove_when": null
+}

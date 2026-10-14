@@ -35,15 +35,23 @@ jobs:
       - name: Generated function helpers are current
         run: npm run generate:function-shared -- --check
 
-      # Both halves of every RLS rule. A malformed rule does not error at
-      # runtime — it silently matches every row or none, which is how StockFlow
-      # lost a day to a cross-tenant leak and another to an app-wide read
-      # outage, three days apart.
-      - name: Validate entity RLS
-        run: npm run validate:rls
-
-      - name: Lint
-        run: npx eslint . --quiet
+      # `npm run lint` is the gate, and CI runs the gate itself rather than a
+      # piece of it. Until 2026-10-14 this step was `npx eslint . --quiet`, so
+      # everything `npm run lint` chains after eslint never ran here — the
+      # endpoint ceiling (validate:functions) was a local-only check. Running
+      # the script means a validator added to `lint` reaches CI with no second
+      # edit. It covers:
+      #   - eslint;
+      #   - validate:rls — both halves of every RLS rule. A malformed rule does
+      #     not error at runtime; it silently matches every row or none, which
+      #     is how StockFlow lost a day to a cross-tenant leak and another to an
+      #     app-wide read outage, three days apart;
+      #   - validate:functions — endpoints under base44.app.json's maxFunctions;
+      #   - validate:function-meta — Module 26: every function has a
+      #     function.meta.json whose actions and callers match the code, no
+      #     `cron:` without a workflow, and docs/FUNCTIONS_REGISTRY.md current.
+      - name: Lint (eslint, RLS, endpoint ceiling, function metadata)
+        run: npm run lint
 
       - name: Build
         run: npm run build

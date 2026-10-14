@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint . --quiet && npm run validate:rls && npm run validate:functions",
+    "lint": "eslint . --quiet && npm run validate:rls && npm run validate:functions && npm run validate:function-meta",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
     "validate:rls": "node scripts/validate-rls.mjs",
@@ -18,6 +18,8 @@
     "deploy:entities": "node scripts/base44-deploy.mjs --entities",
     "functions:audit": "node scripts/base44-audit.mjs",
     "validate:functions": "node scripts/validate-functions.mjs",
+    "validate:function-meta": "node scripts/validate-function-meta.mjs",
+    "generate:function-registry": "node scripts/validate-function-meta.mjs --write",
     "test:smoke": "playwright test"
   },
   "dependencies": {
