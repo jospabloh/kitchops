@@ -10,6 +10,7 @@ import {
   blockCreateWhilePending,
   normalizeInviteCode,
   planJoinRequest,
+  uniqueInviteMatch,
 } from "../functions/complete-onboarding/_join.ts";
 import {
   approvalPatch,
@@ -42,6 +43,20 @@ Deno.test("código inexistente y código apagado dan la misma respuesta", () => 
   const b = planJoinRequest({ id: "b1", invite_code_active: false }, NOW);
   assertEquals(a, b);
   assertEquals(a.ok, false);
+});
+
+Deno.test("un código que coincide con dos negocios no se resuelve a ninguno", () => {
+  const a = { id: "a", invite_code_active: true };
+  const b = { id: "b", invite_code_active: true };
+  assertEquals(uniqueInviteMatch([a]), a);
+  assertEquals(uniqueInviteMatch([a, b]), undefined);
+  assertEquals(uniqueInviteMatch([]), undefined);
+  assertEquals(uniqueInviteMatch(null), undefined);
+  // Ambiguous gets the same answer as unknown: nothing revealed.
+  assertEquals(
+    planJoinRequest(uniqueInviteMatch([a, b]), NOW),
+    planJoinRequest(undefined, NOW),
+  );
 });
 
 Deno.test("quien ya tiene negocio no crea ni solicita otro (409)", () => {

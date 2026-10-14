@@ -60,6 +60,14 @@ export type JoinPlan =
   | Rejection
   | { ok: true; patch: { pending_business_id: string; join_requested_at: string } };
 
+// Nothing in the schema makes invite_code unique, so a code that matches two
+// businesses must not resolve to either: picking one could file the request in
+// the wrong restaurant's queue. Callers fetch up to 2 rows; an ambiguous code
+// is treated like an unknown one (same 404 below, nothing revealed).
+export function uniqueInviteMatch<T>(matches: T[] | null | undefined): T | undefined {
+  return matches?.length === 1 ? matches[0] : undefined;
+}
+
 // Misma respuesta para "no existe ese código" y "código apagado": un código
 // equivocado no debe revelar si alguna vez fue bueno.
 export function planJoinRequest(business: JoinBusiness | null | undefined, now: Date): JoinPlan {
