@@ -176,10 +176,10 @@ export const PERMISSION_SECTIONS = [
       { key: "WhatsApp:manage_numbers", label: "Autorizar números" },
     ],
   },
-  {
-    section: "Bitácora",
-    keys: [{ key: "Bitacora:view", label: "Ver la bitácora de actividad" }],
-  },
+  // No "Bitácora" section on purpose: AuditLog's read rule only matches
+  // business_admin, so a staff toggle for Bitacora:view would show the menu
+  // entry and an always-empty page. RLS cannot read PermissionProfile, so the
+  // toggle could never be made real — it is not offered.
   {
     section: "Configuración",
     keys: [
