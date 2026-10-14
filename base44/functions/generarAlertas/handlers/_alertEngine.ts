@@ -202,9 +202,26 @@ export async function evaluarAlertas(
  * the count or the total, so every new card expense minted another unread
  * "Tarjeta con $X por pagar" — and made deposit alerts of different weeks of
  * the same platform collide with each other.
+ *
+ * A deposit alert on one cut has two variants that must NOT share a key:
+ * "Depósito pendiente" (no deposit yet) and "Depósito menor" (deposit landed
+ * short). The usual sequence is pending → short, and the pending row is still
+ * unread when the money arrives; one key would swallow the shortfall — the one
+ * the reconciliation exists to report. The variant comes from the title's
+ * fixed prefix (no figures in it), so rows already stored key the same way and
+ * no schema field is needed.
  */
+export function varianteDeposito(titulo?: string): string {
+  return (titulo || "").startsWith("Depósito pendiente") ? "pendiente" : "menor";
+}
+
 export function claveAlerta(a: { tipo?: string; titulo?: string; entidad_ref?: string }): string {
-  if (a.entidad_ref) return `${a.tipo}|ref:${a.entidad_ref}`;
+  if (a.entidad_ref) {
+    if (a.tipo === "deposito_faltante") {
+      return `${a.tipo}|ref:${a.entidad_ref}|${varianteDeposito(a.titulo)}`;
+    }
+    return `${a.tipo}|ref:${a.entidad_ref}`;
+  }
   if (a.tipo === "ticket_pendiente" || a.tipo === "pago_pendiente") return `${a.tipo}`;
   return `${a.tipo}|${a.titulo}`;
 }

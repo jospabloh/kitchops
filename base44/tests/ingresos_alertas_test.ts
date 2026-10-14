@@ -136,6 +136,26 @@ Deno.test("dos semanas de Rappi sin depósito son dos alertas, aunque haya una a
   assertEquals(sr.creadas[0].map((a) => a.entidad_ref), ["corte-40", "corte-41"]);
 });
 
+Deno.test("un depósito corto alerta aunque siga abierta la de 'pendiente' del mismo corte", async () => {
+  const sr = fakeSr([
+    { tipo: "deposito_faltante", titulo: "Depósito pendiente de Rappi · semana 2026-40", entidad_ref: "corte-40" },
+  ]);
+  const r = await persistirAlertas(sr, "b1", [
+    alerta({ tipo: "deposito_faltante", titulo: "Depósito menor en Rappi · semana 2026-40", entidad_ref: "corte-40", severidad: "rojo" }),
+  ]);
+  assertEquals(r.creadas, 1);
+});
+
+Deno.test("un depósito corto ya abierto no se repite aunque cambie la cifra", async () => {
+  const sr = fakeSr([
+    { tipo: "deposito_faltante", titulo: "Depósito menor en Rappi · semana 2026-40", entidad_ref: "corte-40" },
+  ]);
+  const r = await persistirAlertas(sr, "b1", [
+    alerta({ tipo: "deposito_faltante", titulo: "Depósito menor en Rappi · semana 2026-40", entidad_ref: "corte-40" }),
+  ]);
+  assertEquals(r.creadas, 0);
+});
+
 Deno.test("dentro del mismo lote una clave repetida se crea una sola vez", async () => {
   const sr = fakeSr([]);
   const r = await persistirAlertas(sr, "b1", [
