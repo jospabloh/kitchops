@@ -1,7 +1,7 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.20";
 import { guard } from "./_guard.ts";
 import { writeAudit } from "./_audit.ts";
-import { derivarConciliacion } from "./_ingresoFields.ts";
+import { derivarConciliacion, isDate } from "./_ingresoFields.ts";
 
 // The narrow "the money landed" action, separate from the general edit path.
 // It exists so the UI can offer a one-field affordance ("¿cuánto te
@@ -31,9 +31,11 @@ export async function handle(req: Request): Promise<Response> {
       );
     }
     if (fecha_deposito !== undefined && fecha_deposito !== null && fecha_deposito !== "") {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha_deposito))) {
+      // isDate, not just the regex: "2026-13-45" matches AAAA-MM-DD and would
+      // land as a deposit date the calendar doesn't have.
+      if (!isDate(fecha_deposito)) {
         return Response.json(
-          { message: "La fecha de depósito debe tener el formato AAAA-MM-DD." },
+          { message: "La fecha de depósito debe ser una fecha real con el formato AAAA-MM-DD." },
           { status: 400 },
         );
       }
@@ -43,7 +45,7 @@ export async function handle(req: Request): Promise<Response> {
       monto_depositado: deposito,
       ...derivarConciliacion(existing, { monto_depositado: deposito }),
     };
-    if (fecha_deposito !== undefined) patch.fecha_deposito = fecha_deposito || null;
+    if (fecha_deposito !== undefined) patch.fecha_deposito = fecha_deposito ? String(fecha_deposito).trim() : null;
     if (notas !== undefined) patch.notas = String(notas).trim();
 
     const updated = await g.sr.entities.IngresoPlataforma.update(id, patch);

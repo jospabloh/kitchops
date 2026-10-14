@@ -17,11 +17,52 @@ export type ValidationResult =
   | { ok: true; fields: Record<string, unknown> }
   | { ok: false; message: string };
 
-function isDate(value: unknown): value is string {
+export function isDate(value: unknown): value is string {
   const s = String(value ?? "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
   const parsed = new Date(`${s}T00:00:00Z`);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(s);
+}
+
+/**
+ * ISO week key that the calendar actually has: 01..52, plus 53 only in the
+ * years that carry one. A cut filed under "2026-00" or "2026-99" would dodge
+ * the one-cut-per-(platform, week) check against the real week.
+ */
+export function isSemana(value: unknown): boolean {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(value ?? "").trim());
+  if (!m) return false;
+  const year = Number(m[1]);
+  const week = Number(m[2]);
+  if (week < 1 || week > 53) return false;
+  if (week < 53) return true;
+  // ISO 8601: a year has week 53 when it starts on a Thursday, or on a
+  // Wednesday in a leap year.
+  const jan1 = new Date(Date.UTC(year, 0, 1)).getUTCDay(); // Sunday = 0
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  return jan1 === 4 || (leap && jan1 === 3);
+}
+
+/**
+ * Whether a patch moves the reconciliation — the step Ingresos:conciliar
+ * guards. That is recording or changing the deposit, and ALSO changing the
+ * cut once a deposit is on record: bringing monto_corte to the deposit's value
+ * recomputes diferencia to 0 and closes the loop just the same. Pass
+ * `existing = null` for a create.
+ */
+export function tocaConciliacion(
+  existing: Record<string, unknown> | null,
+  patch: Record<string, unknown>,
+): boolean {
+  const vacio = (v: unknown) => v === null || v === undefined || v === "";
+  const cambia = (key: string) =>
+    patch[key] !== undefined && String(patch[key] ?? "") !== String(existing?.[key] ?? "");
+  if (cambia("monto_depositado") || cambia("fecha_deposito")) return true;
+  return (
+    !vacio(existing?.monto_depositado) &&
+    patch.monto_corte !== undefined &&
+    Number(patch.monto_corte) !== Number(existing?.monto_corte ?? 0)
+  );
 }
 
 export function validateIngreso(
@@ -42,6 +83,9 @@ export function validateIngreso(
     const semana = String(body.semana ?? "").trim();
     if (!/^\d{4}-\d{2}$/.test(semana)) {
       return { ok: false, message: "La semana es obligatoria y debe tener el formato AAAA-SS." };
+    }
+    if (!isSemana(semana)) {
+      return { ok: false, message: `La semana ${semana} no existe en el calendario.` };
     }
     fields.semana = semana;
   }
