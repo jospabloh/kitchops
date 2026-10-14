@@ -93,6 +93,21 @@ export default function Onboarding() {
         setCargando(false);
         return;
       }
+      // Aviso en tiempo real a ACACIA Mission Control del alta (Módulo 1): sin
+      // esto el negocio nuevo sólo aparecía en el sync diario de las 08:00 UTC.
+      // Mismo modelo que ticket-pull en Soporte.jsx: viaja sólo {app, tenantId},
+      // Mission Control relee el negocio por el puente acaciaControl antes de
+      // creer nada, y aquí no hay secreto. `keepalive` porque la recarga de
+      // abajo cancelaría un fetch normal; un aviso que falla nunca bloquea el alta.
+      const tenantId = (res?.data ?? res)?.business?.id;
+      if (tenantId) {
+        fetch("https://control.acaciaco.com.mx/api/ingest/tenant-pull", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ app: "kitchops", tenantId }),
+          keepalive: true,
+        }).catch(() => {});
+      }
       await checkUserAuth();
       // Full reload: the whole app is scoped to the tenant that was active when
       // it mounted, and this is the moment that changes.

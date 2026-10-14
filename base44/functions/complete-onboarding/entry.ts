@@ -9,7 +9,7 @@ import {
   resolveCaller,
 } from "./_join.ts";
 
-const BUILD = "2026-10-07.trial-30.1";
+const BUILD = "2026-10-14.onboarding-rollback.1";
 console.log(`complete-onboarding build ${BUILD}`);
 
 // Onboarding Safe function (Modules 2 & 3): the ONLY place a user's
@@ -166,11 +166,19 @@ Deno.serve(async (req) => {
         invite_code_active: true,
       });
 
+      let userTouched = false;
       try {
         // Business.tenant_id = id: la regla RLS sobre `id` no empareja ni para
         // el dueño; la de `data.tenant_id` sí (ver CLAUDE.md, "Business.tenant_id").
         await base44.asServiceRole.entities.Business.update(business.id, { tenant_id: business.id });
         business.tenant_id = business.id;
+        // Seed the settings row so the alert engine has thresholds to read on
+        // its very first run, instead of falling back to hardcoded numbers the
+        // owner cannot see or change. BEFORE the User write on purpose: the
+        // assignment must be the last step, so nothing after it can fail and
+        // roll the Business back from under a user who already points at it.
+        await base44.asServiceRole.entities.AppSettings.create({ business_id: business.id });
+        userTouched = true;
         await withTimeout(
           base44.asServiceRole.entities.User.update(user.id, {
             ...rolePatchFor(user, "business_admin"),
@@ -179,16 +187,29 @@ Deno.serve(async (req) => {
           25_000,
           "La asignación de tu negocio a tu cuenta",
         );
-        // Seed the settings row so the alert engine has thresholds to read on
-        // its very first run, instead of falling back to hardcoded numbers the
-        // owner cannot see or change.
-        await base44.asServiceRole.entities.AppSettings.create({ business_id: business.id });
       } catch (error) {
         // The Business landed but nobody got attached to it. Roll it back
         // rather than leaving a tenant with a live invite code and no members —
         // a stray invite code is the part of that mess with a real security
         // edge. Best-effort: if the rollback itself fails, the original error is
         // still what the caller needs to hear.
+        //
+        // A User write that timed out may still land later, so undo it too:
+        // otherwise the user keeps a business_id pointing at the Business we
+        // are about to delete — _guard answers 404 to everything and this
+        // function answers 409, with no way out on their own.
+        if (userTouched) {
+          try {
+            await withTimeout(
+              base44.asServiceRole.entities.User.update(user.id, {
+                ...(user.role === "admin" ? {} : { role: user.role ?? "staff" }),
+                business_id: null,
+              }),
+              10_000,
+              "Deshacer la asignación de tu negocio",
+            );
+          } catch { /* keep reporting the original failure */ }
+        }
         try {
           const settings = await base44.asServiceRole.entities.AppSettings.filter(
             { business_id: business.id }, null, 10,

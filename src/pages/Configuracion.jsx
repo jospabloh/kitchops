@@ -226,24 +226,10 @@ export default function Configuracion() {
           </div>
         </section>
 
-        <section className="rounded-lg border border-border bg-card p-5">
-          <h2 className="font-display text-lg font-semibold text-chalk">Cómo cuentas la semana</h2>
-
-          <div className="mt-4 flex items-start justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium text-chalk">La semana empieza en lunes</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-slate">
-                Apágalo si tus cortes van de domingo a sábado.
-              </p>
-            </div>
-            <Switch
-              checked={form.semana_inicia_lunes}
-              onCheckedChange={(v) => setForm({ ...form, semana_inicia_lunes: v })}
-              disabled={!puedeEditar}
-              aria-label="La semana empieza en lunes"
-            />
-          </div>
-        </section>
+        {/* No "la semana empieza en lunes" switch: every week key (semanaDe, the
+            cuts, the alerts) is the ISO week, which starts on Monday, and
+            nothing reads AppSettings.semana_inicia_lunes. Offering the switch
+            promised a Sunday-start week that never happened. */}
 
         {puedeEditar && (
           <Button type="submit" disabled={guardando}>
