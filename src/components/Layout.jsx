@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import {
   AlertTriangle,
@@ -87,7 +87,16 @@ const BANNER = {
 export default function Layout() {
   const location = useLocation();
   const [abierto, setAbierto] = useState(false);
+  const navRef = useRef(null);
   const { can, business } = usePermissions();
+
+  // Module 23: when the phone drawer opens, bring the active item into view.
+  // After a reload the nav starts at the top, and Manual/Soporte sit below the
+  // fold on a short phone. block:'nearest' does nothing if it is already shown.
+  useEffect(() => {
+    if (!abierto) return;
+    navRef.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "nearest" });
+  }, [abierto]);
   const { user, logout } = useAuth();
 
   const grupos = GRUPOS.map((g) => ({
@@ -142,7 +151,7 @@ export default function Layout() {
           </div>
         </div>
 
-        <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
+        <nav ref={navRef} className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
           {grupos.map((grupo) => (
             <div key={grupo.titulo || "principal"}>
               {grupo.titulo && <p className="eyebrow mb-1.5 px-3">{grupo.titulo}</p>}
