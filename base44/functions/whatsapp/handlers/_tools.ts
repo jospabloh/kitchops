@@ -23,6 +23,7 @@ import { writeAudit } from "./_audit.ts";
 import { validateGasto } from "./_gastoFields.ts";
 import { validateItem } from "./_itemFields.ts";
 import { validateIngreso, derivarConciliacion } from "./_ingresoFields.ts";
+import { fechaLocal } from "./_reglas.ts";
 
 export interface ToolContext {
   // deno-lint-ignore no-explicit-any
@@ -67,9 +68,16 @@ function money(n: unknown): string {
   return `$${Number(n || 0).toLocaleString("es-MX", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
 
-function hoyISO(): string {
-  return new Date().toISOString().slice(0, 10);
+/** Today in the restaurant's own time zone, not UTC. */
+function hoyISO(ctx: ToolContext): string {
+  return fechaLocal(new Date(), ctx.business.timezone);
 }
+
+// The fields registrar_gasto's schema offers. Anything else the model adds
+// (pagado, facturado, ticket_foto_url) is dropped before validation: those are
+// gated on their own keys (Gastos:mark_pagado / mark_facturado) in the app, and
+// a message saying "regístralo como ya pagado" must not bypass that.
+const CAMPOS_GASTO = ["monto", "proveedor", "fecha", "categoria", "metodo_pago", "descripcion"] as const;
 
 // ── Tool schemas handed to Claude ─────────────────────────────────────────
 // Descriptions are written for the model: they say when to use the tool and
@@ -178,7 +186,9 @@ const registrar_gasto: ToolFn = async (ctx, input) => {
   const denied = await permitido(ctx, "Gastos:create");
   if (denied) return { ok: false, detalle: denied };
 
-  const validated = validateGasto({ ...input, fecha: input.fecha || hoyISO() });
+  const campos: Record<string, unknown> = {};
+  for (const k of CAMPOS_GASTO) if (input[k] !== undefined) campos[k] = input[k];
+  const validated = validateGasto({ ...campos, fecha: input.fecha || hoyISO(ctx) });
   if (!validated.ok) return { ok: false, detalle: `No se pudo registrar: ${validated.message}` };
 
   const gasto = await ctx.sr.entities.Gasto.create({
@@ -431,9 +441,8 @@ const resumen_negocio: ToolFn = async (ctx) => {
   // va el mes?" gets the operational half; the owner gets everything.
   const verFinanzas = !(await permitido(ctx, "Dashboard:financials"));
 
-  const now = new Date();
-  const inicioMes = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-01`;
-  const hoy = hoyISO();
+  const hoy = hoyISO(ctx);
+  const inicioMes = `${hoy.slice(0, 7)}-01`;
 
   const [gastos, ingresos, inventario] = await Promise.all([
     ctx.sr.entities.Gasto.filter({ business_id: ctx.businessId }, "-fecha", 2000),

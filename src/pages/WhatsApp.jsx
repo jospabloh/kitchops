@@ -29,7 +29,9 @@ import {
 const MODELOS = [
   { id: "claude-opus-5", nombre: "Opus 5", nota: "El más capaz. Lee tickets difíciles y entiende instrucciones enredadas." },
   { id: "claude-sonnet-5", nombre: "Sonnet 5", nota: "Equilibrado. Suficiente para el día a día." },
-  { id: "claude-haiku-4-5", nombre: "Haiku 4.5", nota: "El más económico. Mejor sólo para preguntas simples." },
+  // Haiku 5.5, not 4.5: the agent always sends adaptive thinking + effort,
+  // which Haiku 4.5 rejects with a 400 on every message.
+  { id: "claude-haiku-5-5", nombre: "Haiku 5.5", nota: "El más económico. Mejor sólo para preguntas simples." },
 ];
 
 const TONOS = [
@@ -48,6 +50,7 @@ export default function WhatsAppPage() {
   const [mensajes, setMensajes] = useState([]);
   const [activa, setActiva] = useState(null);
   const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [probando, setProbando] = useState(false);
   const [form, setForm] = useState(null);
@@ -56,10 +59,14 @@ export default function WhatsAppPage() {
   const puedeConfigurar = can("WhatsApp:configure");
   const puedeNumeros = can("WhatsApp:manage_numbers");
   const puedeBandeja = can("WhatsApp:read_inbox");
+  // saveConfigSafe refuses to change an id that is already connected unless the
+  // caller is the platform admin; mirror that here so the field says so.
+  const idBloqueado = (campo) => Boolean(config?.[campo]) && user?.role !== "admin";
 
   const cargar = useCallback(async () => {
     if (!user?.business_id) return;
     setCargando(true);
+    setErrorCarga(false);
     try {
       const scope = { business_id: user.business_id };
       const [cfgs, convs] = await Promise.all([
@@ -85,6 +92,7 @@ export default function WhatsAppPage() {
       setNumeros(Array.isArray(cfg?.numeros_autorizados) ? cfg.numeros_autorizados : []);
     } catch (e) {
       console.error(e);
+      setErrorCarga(true);
       toast({ title: "No pudimos cargar la configuración", variant: "destructive" });
     } finally {
       setCargando(false);
@@ -162,6 +170,22 @@ export default function WhatsAppPage() {
     if (!numeros.length) return { tono: "medio", texto: "Sin números autorizados" };
     return { tono: "bueno", texto: "Encendido" };
   }, [config, numeros]);
+
+  // A failed first load leaves `form` null; without this branch the skeleton
+  // below would spin forever with no way to try again.
+  if (!cargando && !form && errorCarga) {
+    return (
+      <div>
+        <PageHeader title="Agente de WhatsApp" />
+        <div className="rounded-lg border border-border bg-card p-8 text-center">
+          <p className="text-sm text-slate">No pudimos cargar la configuración del agente.</p>
+          <Button className="mt-4" variant="outline" onClick={cargar}>
+            Reintentar
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (cargando || !form) {
     return (
@@ -279,8 +303,11 @@ export default function WhatsAppPage() {
                     onChange={(e) => setForm({ ...form, provider_account_id: e.target.value })}
                     placeholder="Lo encuentras en Connections → WhatsApp"
                     className="font-mono"
-                    disabled={!puedeConfigurar}
+                    disabled={!puedeConfigurar || idBloqueado("provider_account_id")}
                   />
+                  {idBloqueado("provider_account_id") && (
+                    <p className="text-xs text-slate">Ya está conectado. Para cambiarlo, escríbenos a soporte.</p>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-2 sm:col-span-2">
@@ -291,8 +318,11 @@ export default function WhatsAppPage() {
                     onChange={(e) => setForm({ ...form, provider_phone_number_id: e.target.value })}
                     placeholder="En WhatsApp → API Setup"
                     className="font-mono"
-                    disabled={!puedeConfigurar}
+                    disabled={!puedeConfigurar || idBloqueado("provider_phone_number_id")}
                   />
+                  {idBloqueado("provider_phone_number_id") && (
+                    <p className="text-xs text-slate">Ya está conectado. Para cambiarlo, escríbenos a soporte.</p>
+                  )}
                 </div>
               )}
             </div>
@@ -558,9 +588,13 @@ export default function WhatsAppPage() {
                               {m.acciones.map((a, i) => (
                                 <li
                                   key={i}
-                                  className={cn("font-mono text-[0.625rem]", a.ok ? "text-verde" : "text-rojo")}
+                                  // Inside the navy bubble: text-verde/text-rojo
+                                  // sit at navy's own lightness in the light
+                                  // theme, so the mark carries the meaning and
+                                  // the colour stays on-brand.
+                                  className={cn("font-mono text-[0.625rem] text-on-brand", a.ok && "opacity-80")}
                                 >
-                                  {a.ok ? "✓" : "✕"} {a.tool}
+                                  {a.ok ? "✓" : "✕"} {a.tool}{a.ok ? "" : " (falló)"}
                                 </li>
                               ))}
                             </ul>

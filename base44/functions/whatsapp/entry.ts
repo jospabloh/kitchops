@@ -12,6 +12,7 @@ import {
 } from "./handlers/_providers.ts";
 import { pensarYResponder, HISTORY_LIMIT } from "./handlers/_brain.ts";
 import type { ToolContext } from "./handlers/_tools.ts";
+import { mismoTelefono, ganaElReclamo } from "./handlers/_reglas.ts";
 
 // The KitchOps WhatsApp agent's inbound webhook.
 //
@@ -64,15 +65,11 @@ async function resolverTenant(sr: any, msg: MensajeNormalizado) {
 /** Match the sender against the tenant's allowlist. Returns null when absent. */
 function autorizar(config: any, telefono: string) {
   const lista = Array.isArray(config.numeros_autorizados) ? config.numeros_autorizados : [];
-  const normalizado = (telefono || "").replace(/[^\d]/g, "");
-  if (!normalizado) return null;
+  if (!telefono) return null;
   for (const entrada of lista) {
-    const candidato = String(entrada?.numero || "").replace(/[^\d]/g, "");
-    if (!candidato) continue;
-    // Compare on the last 10 digits: the same Mexican mobile shows up as
-    // +52..., +521... and bare 10 digits depending on the provider and on how
-    // the owner typed it into the allowlist.
-    if (candidato.slice(-10) === normalizado.slice(-10)) {
+    // Full number, country code included. Only the Mexican +52 / +521 / bare
+    // 10-digit forms are treated as the same number — see claveTelefono().
+    if (mismoTelefono(entrada?.numero, telefono)) {
       return {
         numero: String(entrada.numero),
         nombre: String(entrada.nombre || ""),
@@ -143,6 +140,18 @@ async function procesar(sr: any, config: any, msg: MensajeNormalizado, eventoId:
     provider_event_id: msg.eventId,
     enviado_at: new Date().toISOString(),
   });
+
+  if (!remitente && !msg.telefono) {
+    // The provider sent no phone number (Zernio's phoneNumber is optional), so
+    // the allowlist cannot be checked at all. That is not the same as a
+    // stranger: it may well be the owner. Surface it where the owner looks
+    // (ultimo_error) instead of brushing them off as unknown.
+    const detalle =
+      "El proveedor no mandó el teléfono del remitente, así que no se pudo comprobar la lista de números autorizados.";
+    await sr.entities.WhatsAppConfig.update(config.id, { ultimo_error: detalle }).catch(() => {});
+    await sr.entities.WhatsAppEvento.update(eventoId, { estado: "descartado", detalle });
+    return;
+  }
 
   if (!remitente) {
     // Not on the allowlist. Answer politely and do nothing else — this agent
@@ -232,6 +241,16 @@ async function procesar(sr: any, config: any, msg: MensajeNormalizado, eventoId:
     try {
       await responder(config, msg, respuesta);
     } catch { /* nothing more to do */ }
+    // Record it too, so the inbox shows what the user was told and the history
+    // window keeps alternating turns.
+    await sr.entities.WhatsAppMensaje.create({
+      business_id: config.business_id,
+      conversacion_id: conversacion.id,
+      direccion: "saliente",
+      texto: respuesta,
+      provider_event_id: msg.eventId,
+      enviado_at: new Date().toISOString(),
+    }).catch(() => {});
     return;
   }
 
@@ -337,9 +356,16 @@ Deno.serve(async (req) => {
   // — re-processing a message that IS still in flight would double-write the
   // very expense the dedup ledger exists to protect.
   const STALE_CLAIM_MS = 3 * 60 * 1000;
-  const yaVisto = await sr.entities.WhatsAppEvento.filter(
-    { provider_event_id: msg.eventId }, null, 1,
-  ).catch(() => []);
+  let yaVisto: any[];
+  try {
+    yaVisto = await sr.entities.WhatsAppEvento.filter({ provider_event_id: msg.eventId }, null, 1);
+  } catch (e) {
+    // If the ledger cannot be read, we cannot know this is not a retry of a
+    // message already processed. A 5xx makes the provider retry later; treating
+    // the failure as "no row" would record the same expense twice.
+    console.error("whatsapp: no se pudo leer WhatsAppEvento:", (e as Error).message);
+    return new Response("ledger unavailable", { status: 503 });
+  }
   const previo = yaVisto?.[0];
   if (previo) {
     const recibido = Date.parse(previo.recibido_at || previo.created_date || "") || 0;
@@ -370,6 +396,21 @@ Deno.serve(async (req) => {
     estado: "reclamado",
     recibido_at: new Date().toISOString(),
   });
+
+  // The read-then-create above is not atomic: two deliveries arriving together
+  // can both see no row and both create one. Re-read and let only the oldest
+  // claim proceed, so they agree on one winner instead of both running the tools.
+  const reclamos = await sr.entities.WhatsAppEvento.filter(
+    { provider_event_id: msg.eventId }, "created_date", 10,
+  ).catch(() => null);
+  if (reclamos && !ganaElReclamo(reclamos, evento.id)) {
+    // Delete rather than mark "descartado": a final-state loser row could be
+    // what a later retry reads first, and it would then drop the event even if
+    // the winner died mid-flight and its claim went stale.
+    await sr.entities.WhatsAppEvento.delete(evento.id).catch(() => {});
+    console.error(`whatsapp: entrega simultánea del evento ${msg.eventId}; la gana otra.`);
+    return ok({ duplicate: true });
+  }
 
   if (config.activo === false) {
     await sr.entities.WhatsAppEvento.update(evento.id, {

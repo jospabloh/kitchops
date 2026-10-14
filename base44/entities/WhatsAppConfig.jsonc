@@ -27,15 +27,15 @@
   "type": "object",
   "properties": {
     "business_id": { "type": "string", "description": "Tenant (Business.id) dueño de esta configuración" },
-    "activo": { "type": "boolean", "default": false, "description": "Si el agente responde. Apagado = el webhook acepta y descarta." },
+    "activo": { "type": "boolean", "default": false, "description": "Si el agente responde. Apagado = el webhook acepta y descarta. Bloqueado a escritura: sólo whatsappAdmin (service role).", "rls": { "write": { "user_condition": { "role": "admin" } } } },
     "proveedor": {
       "type": "string",
       "enum": ["zernio", "meta"],
       "default": "zernio",
       "description": "Proveedor de WhatsApp. Zernio corre sobre la Cloud API de Meta y resuelve el Embedded Signup; Meta directo requiere app de Facebook propia."
     },
-    "provider_account_id": { "type": "string", "description": "Zernio: accountId. Necesario para responder y para resolver el tenant desde el webhook." },
-    "provider_phone_number_id": { "type": "string", "description": "Meta: Phone Number ID. Mismo papel que provider_account_id en Zernio." },
+    "provider_account_id": { "type": "string", "description": "Zernio: accountId. Necesario para responder y para resolver el tenant desde el webhook. Bloqueado a escritura: sólo whatsappAdmin:saveConfigSafe (service role), que rechaza un id ya reclamado por otro negocio.", "rls": { "write": { "user_condition": { "role": "admin" } } } },
+    "provider_phone_number_id": { "type": "string", "description": "Meta: Phone Number ID. Mismo papel que provider_account_id en Zernio. Bloqueado a escritura igual que provider_account_id.", "rls": { "write": { "user_condition": { "role": "admin" } } } },
     "numero_visible": { "type": "string", "description": "Número de WhatsApp del negocio, en E.164, sólo para mostrar en la UI" },
     "agente_nombre": { "type": "string", "default": "Kitch", "description": "Nombre con el que el agente se presenta" },
     "agente_tono": {
@@ -46,12 +46,14 @@
     },
     "instrucciones_extra": {
       "type": "string",
-      "description": "Contexto libre del negocio que se inyecta en el system prompt (horarios, proveedores frecuentes, cómo llaman a las cosas en esta cocina)."
+      "description": "Contexto libre del negocio que se inyecta en el system prompt (horarios, proveedores frecuentes, cómo llaman a las cosas en esta cocina). Bloqueado a escritura: el tope de longitud vive en saveConfigSafe y se paga con el ANTHROPIC_API_KEY compartido.",
+      "rls": { "write": { "user_condition": { "role": "admin" } } }
     },
     "modelo": {
       "type": "string",
       "default": "claude-sonnet-5",
-      "description": "Modelo de Claude que atiende. Es decisión del dueño del negocio: no lo bajes por tu cuenta para ahorrar."
+      "description": "Modelo de Claude que atiende. Es decisión del dueño del negocio: no lo bajes por tu cuenta para ahorrar. Bloqueado a escritura: la lista blanca de modelos vive en saveConfigSafe.",
+      "rls": { "write": { "user_condition": { "role": "admin" } } }
     },
     "numeros_autorizados": {
       "type": "array",
@@ -72,6 +74,17 @@
   "required": ["business_id"],
   // RLS (Module 4): configurar el agente es cosa del dueño. staff puede leerla
   // (la UI muestra el estado del agente en el panel), nunca escribirla.
+  //
+  // Los candados de campo (rls.write a role:admin) en provider_account_id,
+  // provider_phone_number_id, modelo, instrucciones_extra y activo existen
+  // porque la regla de entidad deja a un business_admin escribir su propia fila
+  // por SDK sin pasar por saveConfigSafe. Sin ellos, apuntar
+  // provider_phone_number_id al id de OTRO negocio hace que resolverTenant vea
+  // dos filas y descarte todos los mensajes de ese negocio (su agente se cae), y
+  // un modelo/instrucciones fuera de lista se cobra al ANTHROPIC_API_KEY
+  // compartido. Las escrituras legítimas van por whatsappAdmin con service role
+  // (evalúa como role:admin), así que no pierden nada. El .jsonc no cambia nada
+  // en vivo: hay que desplegarlo (npm run deploy:entities).
   "rls": {
     "create": {
       "$or": [

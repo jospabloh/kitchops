@@ -28,6 +28,7 @@
 // not a reimplementation of the SDK's types.
 
 import { TOOL_DEFINITIONS, ejecutarTool, type ToolContext } from "./_tools.ts";
+import { fechaLocal, sinAsistenteAlInicio } from "./_reglas.ts";
 
 const API_URL = "https://api.anthropic.com/v1/messages";
 const API_VERSION = "2023-06-01";
@@ -55,6 +56,21 @@ interface MessageResponse {
 }
 
 export const DEFAULT_MODEL = "claude-opus-5";
+
+// Models that reject `thinking: {type: "adaptive"}` and `output_config.effort`
+// (Haiku 4.5 only takes budget_tokens thinking and errors on effort). The UI no
+// longer offers it, but a WhatsAppConfig saved before that may still name it;
+// for those, send neither field instead of a 400 on every message.
+const SIN_THINKING_ADAPTATIVO = new Set(["claude-haiku-4-5"]);
+
+/** Thinking/effort fields for `model`, or none if the model rejects them. */
+export function opcionesDeRazonamiento(model: string): Record<string, unknown> {
+  if (SIN_THINKING_ADAPTATIVO.has(model)) return {};
+  // Adaptive thinking with medium effort: the reasoning here is "which tool,
+  // with what arguments" rather than deep analysis, and the customer is
+  // watching a WhatsApp thread waiting for a reply.
+  return { thinking: { type: "adaptive" }, output_config: { effort: "medium" } };
+}
 
 // Short on purpose: this is a WhatsApp reply, not an essay. The skill's guidance
 // is to keep max_tokens high unless there's a hard reason — "deliberately short
@@ -98,7 +114,9 @@ export function construirSystemPrompt(
 ): string {
   const nombreAgente = config.agente_nombre || "Kitch";
   const tono = TONOS[config.agente_tono as string] || TONOS.amigable;
-  const hoy = new Date().toISOString().slice(0, 10);
+  // The restaurant's local date: in UTC, every evening after 18:00 in Mexico is
+  // already "tomorrow", and the model dates expenses and weeks from this line.
+  const hoy = fechaLocal(new Date(), business.timezone);
   const rolLegible = remitente.rol === "business_admin" ? "dueño/gerente" : "personal de cocina";
 
   return [
@@ -141,12 +159,14 @@ export async function pensarYResponder(input: BrainInput): Promise<BrainResult> 
   // turns are deliberately NOT replayed: the results are already reflected in
   // the data the tools read, and re-sending them invites the model to "confirm"
   // an action a second time.
-  const messages: MessageParam[] = [];
+  const replay: MessageParam[] = [];
   for (const m of historial) {
     const texto = (m.texto || "").trim();
     if (!texto) continue;
-    messages.push({ role: m.direccion === "entrante" ? "user" : "assistant", content: texto });
+    replay.push({ role: m.direccion === "entrante" ? "user" : "assistant", content: texto });
   }
+  // The API rejects a conversation that opens on an assistant turn.
+  const messages: MessageParam[] = sinAsistenteAlInicio(replay);
 
   const contenidoActual: ContentBlockParam[] = [];
   if (imagen) {
@@ -163,6 +183,7 @@ export async function pensarYResponder(input: BrainInput): Promise<BrainResult> 
 
   const acciones: BrainResult["acciones"] = [];
   let respuesta = "";
+  const model = String(config.modelo || DEFAULT_MODEL);
 
   for (let turno = 0; turno < MAX_TURNS; turno++) {
     const httpResponse = await fetch(API_URL, {
@@ -173,14 +194,10 @@ export async function pensarYResponder(input: BrainInput): Promise<BrainResult> 
         "anthropic-version": API_VERSION,
       },
       body: JSON.stringify({
-        model: config.modelo || DEFAULT_MODEL,
+        model,
         max_tokens: MAX_TOKENS,
         system,
-        // Adaptive thinking with medium effort: the reasoning here is "which
-        // tool, with what arguments" rather than deep analysis, and the customer
-        // is watching a WhatsApp thread waiting for a reply.
-        thinking: { type: "adaptive" },
-        output_config: { effort: "medium" },
+        ...opcionesDeRazonamiento(model),
         tools: TOOL_DEFINITIONS,
         messages,
       }),
