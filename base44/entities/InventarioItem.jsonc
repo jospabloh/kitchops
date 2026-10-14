@@ -22,34 +22,21 @@
     }
   },
   "required": ["business_id", "nombre"],
-  // RLS (Module 4): staff ajusta stock a diario — es literalmente su trabajo.
-  // Borrar un insumo del catálogo es de business_admin.
+  // RLS (Module 4): staff ajusta stock a diario, pero por la función Safe
+  // (Inventario:edit_stock); ultimo_costo es Inventario:edit_costo. Escrituras
+  // sólo de servicio para que ninguna clave se pueda saltar por SDK.
   "rls": {
-    "create": {
-      "$or": [
-        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
-        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "staff" } }] },
-        { "user_condition": { "role": "admin" } }
-      ]
-    },
+    // Writes: service role only (role:admin). Every write goes through a Safe
+    // function (_guard.ts: tenant, permission key, billing) — a tenant branch
+    // here would let any member skip all three from the browser via the SDK.
+    "create": { "user_condition": { "role": "admin" } },
     "read": {
       "$or": [
         { "data.business_id": "{{user.data.business_id}}" },
         { "user_condition": { "role": "admin" } }
       ]
     },
-    "update": {
-      "$or": [
-        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
-        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "staff" } }] },
-        { "user_condition": { "role": "admin" } }
-      ]
-    },
-    "delete": {
-      "$or": [
-        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
-        { "user_condition": { "role": "admin" } }
-      ]
-    }
+    "update": { "user_condition": { "role": "admin" } },
+    "delete": { "user_condition": { "role": "admin" } }
   }
 }

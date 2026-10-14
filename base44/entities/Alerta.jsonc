@@ -23,9 +23,12 @@
   },
   "required": ["business_id", "tipo", "titulo", "severidad"],
   // RLS (Module 4): las alertas las CREA el backend (generarAlertas corre como
-  // servicio), no el cliente — por eso create es admin-only. staff puede
-  // marcarlas como leídas, que es todo lo que la UI ofrece.
+  // servicio). Marcarlas como leídas también pasa por la función Safe
+  // (Alertas:mark_read), así que las cuatro escrituras son sólo de servicio.
   "rls": {
+    // Writes: service role only (role:admin). Every write goes through a Safe
+    // function (_guard.ts: tenant, permission key, billing) — a tenant branch
+    // here would let any member skip all three from the browser via the SDK.
     "create": { "user_condition": { "role": "admin" } },
     "read": {
       "$or": [
@@ -33,18 +36,7 @@
         { "user_condition": { "role": "admin" } }
       ]
     },
-    "update": {
-      "$or": [
-        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
-        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "staff" } }] },
-        { "user_condition": { "role": "admin" } }
-      ]
-    },
-    "delete": {
-      "$or": [
-        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
-        { "user_condition": { "role": "admin" } }
-      ]
-    }
+    "update": { "user_condition": { "role": "admin" } },
+    "delete": { "user_condition": { "role": "admin" } }
   }
 }

@@ -11,10 +11,12 @@
   // resolvePermission() on the client and by the Safe functions' own
   // hasPermission() server-side; the two must never disagree.
   //
-  // The isolation guarantee here is the RLS below, not the UI: a business_admin
-  // can only ever read or write a profile row carrying their OWN business_id,
-  // so no tenant can widen (or narrow) another tenant's staff permissions even
-  // by calling the API directly.
+  // The isolation guarantee here is the RLS below, not the UI: a member can only
+  // read a profile row carrying their OWN business_id, and writes are
+  // service-role only — permisos:savePermissionProfileSafe checks
+  // Cuenta:manage_members in that business before saving — so no tenant can
+  // widen (or narrow) another tenant's staff permissions, and no staff can
+  // rewrite the profile that limits them, even by calling the API directly.
   "name": "PermissionProfile",
   "type": "object",
   "properties": {
@@ -29,29 +31,17 @@
   },
   "required": ["business_id", "role"],
   "rls": {
-    "create": {
-      "$or": [
-        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
-        { "user_condition": { "role": "admin" } }
-      ]
-    },
+    // Writes: service role only (role:admin). Every write goes through a Safe
+    // function (_guard.ts: tenant, permission key, billing) — a tenant branch
+    // here would let any member skip all three from the browser via the SDK.
+    "create": { "user_condition": { "role": "admin" } },
     "read": {
       "$or": [
         { "data.business_id": "{{user.data.business_id}}" },
         { "user_condition": { "role": "admin" } }
       ]
     },
-    "update": {
-      "$or": [
-        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
-        { "user_condition": { "role": "admin" } }
-      ]
-    },
-    "delete": {
-      "$or": [
-        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
-        { "user_condition": { "role": "admin" } }
-      ]
-    }
+    "update": { "user_condition": { "role": "admin" } },
+    "delete": { "user_condition": { "role": "admin" } }
   }
 }

@@ -24,8 +24,19 @@
     "device": { "type": "string", "description": "Etiqueta corta del navegador/dispositivo (p.ej. 'Chrome · macOS')" },
     "started_at": { "type": "string", "format": "date-time", "description": "Inicio de sesión" },
     "last_active_at": { "type": "string", "format": "date-time", "description": "Última actividad (movida por el latido)" },
-    "revoked_at": { "type": "string", "format": "date-time", "description": "Marcada por Mission Control para forzar el cierre de sesión" },
-    "revoked_by": { "type": "string", "description": "Operador que forzó el cierre (auditoría)" }
+    // revoked_at/revoked_by are written only by the bridge (service role). The
+    // row's owner may update it for the heartbeat, so without these locks a
+    // revoked user could write revoked_at:null back and undo the forced logout.
+    "revoked_at": {
+      "type": "string", "format": "date-time",
+      "description": "Marcada por Mission Control para forzar el cierre de sesión. Bloqueada a escritura: si el dueño de la fila pudiera escribirla, borraría la marca y deshacería el cierre",
+      "rls": { "write": { "user_condition": { "role": "admin" } } }
+    },
+    "revoked_by": {
+      "type": "string",
+      "description": "Operador que forzó el cierre (auditoría). Bloqueado a escritura, igual que revoked_at",
+      "rls": { "write": { "user_condition": { "role": "admin" } } }
+    }
   },
   "required": ["user_email"],
   "rls": {

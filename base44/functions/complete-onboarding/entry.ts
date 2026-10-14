@@ -7,9 +7,10 @@ import {
   normalizeInviteCode,
   planJoinRequest,
   resolveCaller,
+  uniqueInviteMatch,
 } from "./_join.ts";
 
-const BUILD = "2026-10-07.trial-30.1";
+const BUILD = "2026-10-14.invite-unique.1";
 console.log(`complete-onboarding build ${BUILD}`);
 
 // Onboarding Safe function (Modules 2 & 3): the ONLY place a user's
@@ -207,8 +208,8 @@ Deno.serve(async (req) => {
       if (!code) {
         return Response.json({ message: "El código de invitación es obligatorio." }, { status: 400 });
       }
-      const matches = await sr.entities.Business.filter({ invite_code: code }, null, 1);
-      const business = matches?.[0];
+      const matches = await sr.entities.Business.filter({ invite_code: code }, null, 2);
+      const business = uniqueInviteMatch(matches);
       const plan = planJoinRequest(business as JoinBusiness | undefined, new Date());
       if (!plan.ok) return Response.json({ message: plan.message }, { status: plan.status });
 

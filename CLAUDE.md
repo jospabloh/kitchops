@@ -772,3 +772,34 @@ nuevo: `trial_end_at - trial_start_at` debe ser 30 días.
 el bundle servido trae "Empiezas con 30 días de prueba, sin tarjeta." y ninguna
 mención a 14 días. **No verificado:** el alta real de un negocio nuevo (necesita
 una cuenta nueva), que es lo único que prueba que la función que corre es la nueva.
+
+## Escrituras sólo por funciones Safe, también en la RLS (2026-10-14)
+
+**Causa.** La premisa "toda escritura pasa por una función Safe" sólo se cumplía
+en la interfaz. La RLS de 12 entidades con inquilino (Gasto, IngresoPlataforma,
+InventarioItem, Alerta, Proveedor, AppSettings, PermissionProfile,
+SupportTicket, SupportTicketMessage, WhatsAppConfig, WhatsAppConversacion,
+WhatsAppMensaje) y el `update` de `Business` aceptaban escritura directa por SDK
+a miembros del negocio. Desde la consola del navegador un `staff` conciliaba
+cortes sin `Ingresos:conciliar` (y escribía la `diferencia` que quisiera), marcaba
+pagos sin `Gastos:mark_pagado`, y un negocio `suspended` seguía escribiendo: el
+permiso y el bloqueo por facturación sólo existen en `_guard.ts`. Mismo patrón
+que el módulo 14 encontró en `Business`, que sólo se cerró a medias.
+
+**Ahora.** `create`/`update`/`delete` de esas 13 son exactamente
+`{"user_condition":{"role":"admin"}}` (el service role); `read` conserva su rama
+de inquilino. `npm run validate:rls` lo exige (`scripts/lib/rls-rules.mjs`, sin
+imports, probado en `base44/tests/rls_rules_test.ts`): una rama de inquilino en
+una escritura falla igual que una rama admin ausente. `src/` no escribe ninguna
+de ellas; la única escritura directa es la documentada de `AppSession`.
+
+Candados de campo nuevos: `Business.invite_code` / `invite_code_active` (un
+dueño podía copiar el código de otro restaurante y quedarse sus solicitudes) y
+`AppSession.revoked_at` / `revoked_by` (el usuario revocado podía borrar la
+marca). Además `complete-onboarding` `join` pide 2 coincidencias y trata un
+código ambiguo como inválido (`uniqueInviteMatch`). El panel de Permisos ya no
+ofrece "Ver la bitácora" a staff: la RLS de `AuditLog` nunca se lo dejaría ver.
+
+**Si una pantalla nueva necesita escribir, es una función Safe nueva**, no una
+rama en la RLS. Una regla de escritura con rama de inquilino es una puerta que
+se salta permisos, facturación, validación y bitácora.
