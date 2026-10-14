@@ -13,9 +13,11 @@ import {
 } from "../functions/complete-onboarding/_join.ts";
 import {
   approvalPatch,
+  billingBlock,
   canDecideRequest,
   clearRequestPatch,
   isAssignableRole,
+  memberSummary,
   targetBusinessOf,
   validateApproval,
 } from "../functions/manage-member/_requests.ts";
@@ -198,4 +200,45 @@ Deno.test("last-admin guard: pre-check and recount", () => {
   if (!lostAllAdmins([staff], true)) throw new Error("recount must flag zero admins");
   if (lostAllAdmins([staff], false)) throw new Error("only an admin-removing write is blamed");
   if (lostAllAdmins([admin], true)) throw new Error("an admin remains");
+});
+
+// ---- list_members y la puerta de facturación de manage-member ---------------
+
+Deno.test("list_members devuelve sólo id, correo, nombre y rol de cada persona", () => {
+  const row = {
+    id: "u1",
+    email: "ana@cocina.mx",
+    full_name: "Ana",
+    role: "staff",
+    business_id: "b1",
+    pending_business_id: null,
+    phone: "4491234567",
+  };
+  assertEquals(memberSummary(row), { id: "u1", email: "ana@cocina.mx", full_name: "Ana", role: "staff" });
+  assertEquals(memberSummary({ id: "u2" }), { id: "u2", email: "", full_name: "", role: "" });
+});
+
+Deno.test("solo lectura y suspendido no aprueban solicitudes ni cambian roles", () => {
+  const dueno = { id: "o1", role: "business_admin", business_id: "b1" };
+  for (const status of ["view_only", "suspended"]) {
+    for (const action of ["approve_request", "change_role"]) {
+      const r = billingBlock(dueno, action, status);
+      assert(r !== null, `${action} con ${status} debe bloquearse`);
+      assertEquals(r?.status, 403);
+    }
+  }
+});
+
+Deno.test("quitar acceso sigue abierto aunque el negocio esté suspendido", () => {
+  const dueno = { id: "o1", role: "business_admin", business_id: "b1" };
+  for (const action of ["remove", "reject_request", "list_members", "list_requests"]) {
+    assertEquals(billingBlock(dueno, action, "suspended"), null);
+  }
+});
+
+Deno.test("con licencia activa o en prueba, y para el admin de plataforma, no hay bloqueo", () => {
+  const dueno = { id: "o1", role: "business_admin", business_id: "b1" };
+  assertEquals(billingBlock(dueno, "approve_request", "active"), null);
+  assertEquals(billingBlock(dueno, "approve_request", "trial"), null);
+  assertEquals(billingBlock({ id: "p1", role: "admin" }, "approve_request", "suspended"), null);
 });

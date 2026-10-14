@@ -95,8 +95,11 @@ export default function Alertas() {
     setLimpiando(true);
     try {
       const r = await base44.functions.invoke("alertas", { action: "markReadSafe", all: true });
-      toast({ title: `${r?.data?.marcadas ?? 0} alertas archivadas` });
-      cargar();
+      const marcadas = r?.data?.marcadas ?? 0;
+      toast({ title: `${marcadas} ${marcadas === 1 ? "alerta archivada" : "alertas archivadas"}` });
+      // Mark them locally: a re-read right after the write can still return
+      // them unread (see src/lib/registros.js).
+      setAlertas((list) => list.map((a) => ({ ...a, leida: true })));
     } catch (err) {
       toast({ title: mensajeDeError(err, "No pudimos archivarlas"), variant: "destructive" });
     } finally {

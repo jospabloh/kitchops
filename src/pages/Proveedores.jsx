@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { usePermissions } from "@/lib/PermissionContext";
 import { mensajeDeError, money } from "@/lib/format";
+import { conRegistro, sinRegistro } from "@/lib/registros";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
@@ -105,15 +106,18 @@ export default function Proveedores() {
     setGuardando(true);
     try {
       const payload = { business_id: user.business_id, ...form, nombre: form.nombre.trim() };
+      // The returned row goes straight into the list: re-reading right after
+      // the write can miss it (see src/lib/registros.js).
       if (editando) {
-        await base44.functions.invoke("proveedores", { action: "updateProveedorSafe", id: editando.id, ...payload });
+        const r = await base44.functions.invoke("proveedores", { action: "updateProveedorSafe", id: editando.id, ...payload });
+        setProveedores((list) => conRegistro(list, r?.data?.proveedor));
         toast({ title: "Proveedor actualizado" });
       } else {
-        await base44.functions.invoke("proveedores", { action: "createProveedorSafe", ...payload });
+        const r = await base44.functions.invoke("proveedores", { action: "createProveedorSafe", ...payload });
+        setProveedores((list) => conRegistro(list, r?.data?.proveedor));
         toast({ title: "Proveedor agregado" });
       }
       setAbierto(false);
-      cargar();
     } catch (err) {
       setError(mensajeDeError(err, "No pudimos guardar el proveedor."));
     } finally {
@@ -130,7 +134,9 @@ export default function Proveedores() {
       // The backend deactivates rather than deletes when there's spend history,
       // and says so — pass that through instead of claiming "eliminado".
       toast({ title: r?.data?.deactivated ? "Proveedor desactivado" : "Proveedor eliminado", description: r?.data?.message });
-      cargar();
+      setProveedores((list) =>
+        r?.data?.deactivated ? conRegistro(list, { ...p, activo: false }) : sinRegistro(list, p.id),
+      );
     } catch (err) {
       toast({ title: mensajeDeError(err, "No pudimos eliminarlo"), variant: "destructive" });
     }

@@ -146,3 +146,59 @@ export function lostAllAdmins(
 ): boolean {
   return targetWasBusinessAdmin && countTenantAdmins(membersAfter) === 0;
 }
+
+// ---- Team list (Cuenta > Equipo) -------------------------------------------
+// A business_admin cannot list users through the SDK — Base44 answers 403
+// "Only collaborators can view the list of users" (measured live 2026-10-14) —
+// so the team comes from here, read with the service role and cut down to what
+// the screen draws. Nothing else of the person leaves the server.
+
+export interface MemberRow {
+  id?: string;
+  email?: string | null;
+  full_name?: string | null;
+  role?: string | null;
+}
+
+export function memberSummary(r: MemberRow) {
+  return {
+    id: r.id,
+    email: r.email || "",
+    full_name: r.full_name || "",
+    role: r.role || "",
+  };
+}
+
+// ---- Billing gate (Module 1 + Module 3) -------------------------------------
+// Same rule as _guard.ts / hasPermission(): a view_only or suspended tenant
+// keeps reading but stops writing, and the platform admin is exempt. Applied to
+// the actions that GRANT access (approving a request, changing a role). Taking
+// access away — removing someone, rejecting a request — stays open on purpose:
+// an owner whose subscription lapsed must still be able to lock out a former
+// employee, and blocking that would make suspension a security problem.
+
+export const BILLING_GATED_ACTIONS = ["approve_request", "change_role"] as const;
+
+export function billingBlock(
+  caller: RequestUser,
+  action: unknown,
+  billingStatus: unknown,
+): Denied | null {
+  if (caller.role === "admin") return null;
+  if (!(BILLING_GATED_ACTIONS as readonly unknown[]).includes(action)) return null;
+  if (billingStatus === "suspended") {
+    return {
+      ok: false,
+      status: 403,
+      message: "Tu negocio está suspendido. Reactívalo para poder guardar cambios.",
+    };
+  }
+  if (billingStatus === "view_only") {
+    return {
+      ok: false,
+      status: 403,
+      message: "Tu negocio está en modo de solo lectura. Puedes consultar, pero no guardar cambios.",
+    };
+  }
+  return null;
+}

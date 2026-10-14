@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { usePermissions } from "@/lib/PermissionContext";
 import { mensajeDeError } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
+import LoadError from "@/components/LoadError";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,6 +34,7 @@ export default function Configuracion() {
 
   const [form, setForm] = useState(VACIO);
   const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
   const puedeEditar = can("Configuracion:edit");
@@ -40,6 +42,7 @@ export default function Configuracion() {
   const cargar = useCallback(async () => {
     if (!user?.business_id) return;
     setCargando(true);
+    setErrorCarga(false);
     try {
       const rows = await base44.entities.AppSettings.filter({ business_id: user.business_id }, null, 1);
       const s = rows?.[0];
@@ -56,7 +59,10 @@ export default function Configuracion() {
         });
       }
     } catch (e) {
+      // Without this the form would sit on its defaults, and "Guardar" would
+      // write them over the real settings (email, thresholds, WhatsApp).
       console.error(e);
+      setErrorCarga(true);
     } finally {
       setCargando(false);
     }
@@ -93,6 +99,18 @@ export default function Configuracion() {
       <div>
         <PageHeader title="Configuración" description="Cargando…" />
         <div className="h-64 animate-pulse rounded-lg border border-border bg-card" />
+      </div>
+    );
+  }
+
+  if (errorCarga) {
+    return (
+      <div>
+        <PageHeader title="Configuración" />
+        <LoadError
+          message="No pudimos cargar tu configuración. Para no guardar encima de lo que ya tienes, inténtalo otra vez antes de cambiar algo."
+          onRetry={cargar}
+        />
       </div>
     );
   }

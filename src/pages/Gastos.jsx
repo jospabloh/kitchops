@@ -4,6 +4,7 @@ import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { usePermissions } from "@/lib/PermissionContext";
 import { fecha, hoy, mensajeDeError, money } from "@/lib/format";
+import { conRegistro, sinRegistro } from "@/lib/registros";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
@@ -139,15 +140,18 @@ export default function Gastos() {
         facturado: form.facturado,
         pagado: form.pagado,
       };
+      // The returned row goes straight into the list: re-reading right after
+      // the write can miss it (see src/lib/registros.js).
       if (editando) {
-        await base44.functions.invoke("gastos", { action: "updateGastoSafe", id: editando.id, ...payload });
+        const r = await base44.functions.invoke("gastos", { action: "updateGastoSafe", id: editando.id, ...payload });
+        setGastos((list) => conRegistro(list, r?.data?.gasto));
         toast({ title: "Gasto actualizado" });
       } else {
-        await base44.functions.invoke("gastos", { action: "createGastoSafe", ...payload });
+        const r = await base44.functions.invoke("gastos", { action: "createGastoSafe", ...payload });
+        setGastos((list) => conRegistro(list, r?.data?.gasto));
         toast({ title: "Gasto registrado" });
       }
       setAbierto(false);
-      cargar();
     } catch (err) {
       // The server writes a specific, useful sentence for every rejection —
       // "no tienes permiso", "tu negocio está en solo lectura", "esa fecha no
@@ -162,8 +166,8 @@ export default function Gastos() {
     if (!window.confirm(`¿Eliminar el gasto de ${money(g.monto)} con ${g.proveedor}? No se puede deshacer.`)) return;
     try {
       await base44.functions.invoke("gastos", { action: "deleteGastoSafe", id: g.id, business_id: user.business_id });
+      setGastos((list) => sinRegistro(list, g.id));
       toast({ title: "Gasto eliminado" });
-      cargar();
     } catch (err) {
       toast({ title: mensajeDeError(err, "No pudimos eliminarlo"), variant: "destructive" });
     }
@@ -171,13 +175,13 @@ export default function Gastos() {
 
   const alternar = async (g, campo) => {
     try {
-      await base44.functions.invoke("gastos", {
+      const r = await base44.functions.invoke("gastos", {
         action: "updateGastoSafe",
         id: g.id,
         business_id: user.business_id,
         [campo]: !g[campo],
       });
-      cargar();
+      setGastos((list) => conRegistro(list, r?.data?.gasto));
     } catch (err) {
       toast({ title: mensajeDeError(err, "No pudimos actualizarlo"), variant: "destructive" });
     }
@@ -284,21 +288,23 @@ export default function Gastos() {
 
                   {/* Two facts about a card expense that people chase weekly.
                       Rendered as toggles rather than badges because chasing
-                      them IS the task. */}
+                      them IS the task. Each toggle goes through
+                      updateGastoSafe, which checks Gastos:edit BEFORE the
+                      specific mark_* key — so both are needed here too. */}
                   {g.metodo_pago === "Tarjeta de crédito" && (
                     <div className="flex shrink-0 gap-1.5">
                       <EstadoToggle
                         activo={g.facturado}
                         onSi="Facturado"
                         onNo="Sin factura"
-                        disabled={!puedeFacturado}
+                        disabled={!(puedeEditar && puedeFacturado)}
                         onClick={() => alternar(g, "facturado")}
                       />
                       <EstadoToggle
                         activo={g.pagado}
                         onSi="Pagado"
                         onNo="Sin pagar"
-                        disabled={!puedePagado}
+                        disabled={!(puedeEditar && puedePagado)}
                         onClick={() => alternar(g, "pagado")}
                       />
                     </div>

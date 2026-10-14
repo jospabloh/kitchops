@@ -106,12 +106,23 @@ export function inicioDeMes() {
  * backend went to the trouble of writing — which for this app is usually
  * "no tienes permiso para hacer esto" or "tu negocio está en solo lectura".
  */
+//
+// Only the SERVER's sentence is passed through. `error.message` is not: on the
+// functions client it is axios's own English ("Network Error", "Request failed
+// with status code 500"), and a 401 carries the guard's bare "Unauthorized".
+// Those become a Spanish sentence about what actually happened, or the
+// caller's fallback.
 export function mensajeDeError(error, fallback = "Algo salió mal. Inténtalo otra vez.") {
-  return (
+  const status = error?.status ?? error?.response?.status ?? error?.originalError?.response?.status;
+  if (status === 401) return "Tu sesión venció. Vuelve a entrar.";
+  const servidor =
     error?.data?.message ||
     error?.response?.data?.message ||
-    error?.originalError?.response?.data?.message ||
-    error?.message ||
-    fallback
-  );
+    error?.originalError?.response?.data?.message;
+  if (servidor) return servidor;
+  // No response at all: the request never reached the server.
+  if (!status && (error?.code === "ERR_NETWORK" || error?.message === "Network Error")) {
+    return "No pudimos conectar. Revisa tu internet e inténtalo otra vez.";
+  }
+  return fallback;
 }

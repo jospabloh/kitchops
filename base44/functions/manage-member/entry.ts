@@ -1,6 +1,7 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.20";
 import {
   approvalPatch,
+  billingBlock,
   canDecideRequest,
   clearRequestPatch,
   lookupBusiness,
@@ -8,6 +9,7 @@ import {
   validateApproval,
   isAdminRole,
   lostAllAdmins,
+  memberSummary,
   wouldLeaveNoAdmin,
 } from "./_requests.ts";
 
@@ -22,11 +24,18 @@ import {
 // request; nothing but approve_request below writes business_id for a person
 // who came in with an invite code. The approver picks the role from a whitelist
 // (./_requests.ts), never 'admin' (platform tier).
+//
+// list_members is the team list Cuenta > Equipo draws: the SDK refuses a
+// business_admin a User listing, so it is read here with the service role.
+//
+// Billing (Module 1): approve_request and change_role are refused for a
+// view_only/suspended tenant, the same message _guard.ts gives. Reads,
+// reject_request and remove stay open — see billingBlock() in ./_requests.ts.
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const caller = await base44.auth.me();
-    if (!caller) return Response.json({ message: "Unauthorized" }, { status: 401 });
+    if (!caller) return Response.json({ message: "Tu sesión venció. Vuelve a entrar." }, { status: 401 });
 
     const isPlatformAdmin = caller.role === "admin";
     if (!isPlatformAdmin && caller.role !== "business_admin") {
@@ -35,6 +44,13 @@ Deno.serve(async (req) => {
 
     const { action, memberId, role, businessId } = await req.json();
     const sr = base44.asServiceRole;
+
+    if (action === "list_members") {
+      const target = targetBusinessOf(caller, businessId);
+      if (!target) return Response.json({ message: "No autorizado." }, { status: 403 });
+      const rows = await sr.entities.User.filter({ business_id: target }, "email", 200);
+      return Response.json({ members: (rows || []).map(memberSummary) });
+    }
 
     if (action === "list_requests") {
       const target = targetBusinessOf(caller, businessId);
@@ -68,6 +84,10 @@ Deno.serve(async (req) => {
       // shows "approved" for something that was not.
       const lookup = await lookupBusiness(() => sr.entities.Business.get(target!));
       const biz = lookup.state === "found" ? lookup.business : null;
+      if (action === "approve_request" && biz) {
+        const blocked = billingBlock(caller, action, biz.billing_status);
+        if (blocked) return Response.json({ message: blocked.message, reason: "write_blocked" }, { status: blocked.status });
+      }
       const auditRequest = async (summary: string) => {
         try {
           await sr.entities.AuditLog.create({
@@ -152,6 +172,8 @@ Deno.serve(async (req) => {
       if (!["business_admin", "staff"].includes(role)) {
         return Response.json({ message: "role inválido." }, { status: 400 });
       }
+      const blocked = billingBlock(caller, action, business?.billing_status);
+      if (blocked) return Response.json({ message: blocked.message, reason: "write_blocked" }, { status: blocked.status });
       // One user, one tenant: `User.role` IS the durable record. There is no
       // second copy of it to keep in sync any more — the `Membership` entity
       // that used to hold one went away with the tenant picker.
@@ -188,7 +210,7 @@ Deno.serve(async (req) => {
       return Response.json({ member: updated });
     }
 
-    return Response.json({ message: "action debe ser 'change_role', 'remove', 'list_requests', 'approve_request' o 'reject_request'." }, { status: 400 });
+    return Response.json({ message: "action debe ser 'change_role', 'remove', 'list_members', 'list_requests', 'approve_request' o 'reject_request'." }, { status: 400 });
   } catch (error) {
     return Response.json({ message: (error as Error).message }, { status: 500 });
   }

@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { usePermissions } from "@/lib/PermissionContext";
 import { fechaHora, haceRato, mensajeDeError } from "@/lib/format";
+import { conRegistro } from "@/lib/registros";
 import { APP_VERSION } from "@/lib/appConfig";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -37,7 +38,7 @@ const VACIO = { subject: "", category: "soporte", message: "" };
 // Module 0 warns against.
 export default function Soporte() {
   const { user, business } = useAuth();
-  const { can } = usePermissions();
+  const { can, writeBlockedReason } = usePermissions();
   const { toast } = useToast();
 
   const [tickets, setTickets] = useState([]);
@@ -49,7 +50,12 @@ export default function Soporte() {
   const [respuesta, setRespuesta] = useState("");
   const [error, setError] = useState("");
 
-  const puedeEnviar = can("Soporte:create");
+  // Opening a ticket skips the billing gate on purpose: createTicketSafe runs
+  // with ignoreBillingBlock, because a suspended tenant is the one most likely
+  // to need support (and the suspension banner sends them here). Replying still
+  // goes through the full gate server-side, so the reply box keeps it too.
+  const puedeEnviar = can("Soporte:create", { ignoreBilling: true });
+  const puedeResponder = can("Soporte:create");
 
   const cargar = useCallback(async () => {
     if (!user?.business_id) return;
@@ -76,14 +82,18 @@ export default function Soporte() {
         { business_id: user.business_id, ticket_id: t.id }, "created_date", 100,
       );
       setMensajes(rows || []);
-      if (t.unread_for_tenant) {
-        await base44.functions.invoke("soporte", {
-          action: "markThreadReadSafe", ticket_id: t.id, business_id: user.business_id,
-        });
-        cargar();
-      }
     } catch {
       setMensajes([]);
+      return;
+    }
+    // Best-effort and separate from the read above: clearing the badge can be
+    // refused (e.g. a view_only tenant hits the write gate), and that must never
+    // wipe the thread the person just opened to read.
+    if (t.unread_for_tenant) {
+      base44.functions
+        .invoke("soporte", { action: "markThreadReadSafe", ticket_id: t.id, business_id: user.business_id })
+        .then(() => setTickets((list) => list.map((x) => (x.id === t.id ? { ...x, unread_for_tenant: false } : x))))
+        .catch(() => {});
     }
   };
 
@@ -115,7 +125,9 @@ export default function Soporte() {
       }
       toast({ title: "Enviado", description: "Te respondemos por aquí y por correo." });
       setForm(VACIO);
-      cargar();
+      // Use the row the function returned: a filter right after the write can
+      // still miss it, and the list would claim "Todavía no nos has escrito".
+      if (r?.data?.ticket) setTickets((list) => conRegistro(list, r.data.ticket));
     } catch (err) {
       setError(mensajeDeError(err, "No pudimos enviar tu mensaje."));
     } finally {
@@ -127,15 +139,30 @@ export default function Soporte() {
     if (!respuesta.trim() || !activo) return;
     setEnviando(true);
     try {
-      await base44.functions.invoke("soporte", {
+      const r = await base44.functions.invoke("soporte", {
         action: "replyTicketSafe",
         ticket_id: activo.id,
         business_id: user.business_id,
         message: respuesta,
       });
+      const enviado = respuesta;
       setRespuesta("");
-      abrir(activo);
-      cargar();
+      // Same read-after-write gap as above: show the reply we just sent rather
+      // than re-reading a thread that may not have it yet.
+      setMensajes((list) => [
+        ...list,
+        {
+          id: `local-${Date.now()}`,
+          author_role: "tenant",
+          author_name: user.full_name || user.email || "",
+          body: enviado,
+          sent_at: new Date().toISOString(),
+        },
+      ]);
+      if (r?.data?.ticket) {
+        setTickets((list) => conRegistro(list, r.data.ticket));
+        setActivo(r.data.ticket);
+      }
     } catch (err) {
       toast({ title: mensajeDeError(err, "No pudimos enviar tu respuesta"), variant: "destructive" });
     } finally {
@@ -271,7 +298,14 @@ export default function Soporte() {
                           ))}
                         </ul>
 
-                        {puedeEnviar && t.status !== "resolved" && (
+                        {!puedeResponder && puedeEnviar && t.status !== "resolved" && writeBlockedReason && (
+                          <p className="mt-4 border-t border-border pt-4 text-xs leading-relaxed text-slate">
+                            Mientras tu negocio esté en solo lectura o suspendido no puedes responder
+                            aquí. Escríbenos un mensaje nuevo desde «Escríbenos» y lo vemos.
+                          </p>
+                        )}
+
+                        {puedeResponder && t.status !== "resolved" && (
                           <div className="mt-4 space-y-2 border-t border-border pt-4">
                             <Textarea
                               rows={3}

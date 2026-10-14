@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { usePermissions } from "@/lib/PermissionContext";
 import { fecha, mensajeDeError, money, moneySigned, semanaDe, semanaLegible } from "@/lib/format";
+import { conRegistro, sinRegistro } from "@/lib/registros";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import StatCard from "@/components/StatCard";
@@ -36,6 +37,9 @@ export default function Ingresos() {
   const [error, setError] = useState("");
 
   const puedeCrear = can("Ingresos:create");
+  // Editing a cut is Ingresos:edit; only the deposit fields inside the dialog
+  // need Ingresos:conciliar — the same split updateIngresoSafe enforces.
+  const puedeEditar = can("Ingresos:edit");
   const puedeConciliar = can("Ingresos:conciliar");
   const puedeBorrar = can("Ingresos:delete");
   const verFinanzas = can("Dashboard:financials");
@@ -112,15 +116,24 @@ export default function Ingresos() {
         fecha_deposito: form.fecha_deposito || null,
         notas: form.notas,
       };
+      // Someone who can't reconcile doesn't send the deposit at all, so fixing a
+      // typo in the cut can never be read as touching the deposit.
+      if (!puedeConciliar) {
+        delete payload.monto_depositado;
+        delete payload.fecha_deposito;
+      }
+      // The returned row goes straight into the list: re-reading right after
+      // the write can miss it (see src/lib/registros.js).
       if (editando) {
-        await base44.functions.invoke("ingresos", { action: "updateIngresoSafe", id: editando.id, ...payload });
+        const r = await base44.functions.invoke("ingresos", { action: "updateIngresoSafe", id: editando.id, ...payload });
+        setCortes((list) => conRegistro(list, r?.data?.ingreso));
         toast({ title: "Corte actualizado" });
       } else {
-        await base44.functions.invoke("ingresos", { action: "createIngresoSafe", ...payload });
+        const r = await base44.functions.invoke("ingresos", { action: "createIngresoSafe", ...payload });
+        setCortes((list) => conRegistro(list, r?.data?.ingreso));
         toast({ title: "Corte registrado" });
       }
       setAbierto(false);
-      cargar();
     } catch (err) {
       setError(mensajeDeError(err, "No pudimos guardar el corte."));
     } finally {
@@ -132,8 +145,8 @@ export default function Ingresos() {
     if (!window.confirm(`¿Eliminar el corte de ${c.plataforma} de la ${semanaLegible(c.semana).toLowerCase()}?`)) return;
     try {
       await base44.functions.invoke("ingresos", { action: "deleteIngresoSafe", id: c.id, business_id: user.business_id });
+      setCortes((list) => sinRegistro(list, c.id));
       toast({ title: "Corte eliminado" });
-      cargar();
     } catch (err) {
       toast({ title: mensajeDeError(err, "No pudimos eliminarlo"), variant: "destructive" });
     }
@@ -156,7 +169,7 @@ export default function Ingresos() {
           <StatCard
             label="Depositado en total"
             value={money(resumen.cobrado)}
-            sublabel={`${cortes.length} ${cortes.length === 1 ? "corte" : "cortes"} registrados`}
+            sublabel={`${cortes.length} ${cortes.length === 1 ? "corte registrado" : "cortes registrados"}`}
             icon={Wallet}
             tone="copper"
             sensitive={!verFinanzas}
@@ -164,7 +177,15 @@ export default function Ingresos() {
           <StatCard
             label="Sin depósito"
             value={String(resumen.pendientes.length)}
-            sublabel={resumen.pendientes.length === 0 ? "Todo conciliado" : "Cortes esperando el depósito"}
+            sublabel={
+              resumen.pendientes.length > 0
+                ? "Cortes esperando el depósito"
+                : resumen.cortos.length > 0
+                  // Every deposit is in, but some came in short: "todo
+                  // conciliado" next to "te quedaron a deber" would contradict it.
+                  ? "Ningún depósito pendiente"
+                  : "Todo conciliado"
+            }
             icon={AlertTriangle}
             tone={resumen.pendientes.length > 0 ? "warning" : "positive"}
           />
@@ -244,11 +265,11 @@ export default function Ingresos() {
 
                 {c.notas && <p className="mt-2.5 text-xs leading-relaxed text-slate">{c.notas}</p>}
 
-                {(puedeConciliar || puedeBorrar) && (
+                {(puedeEditar || puedeBorrar) && (
                   <div className="mt-3 flex gap-2 border-t border-border pt-3">
-                    {puedeConciliar && (
+                    {puedeEditar && (
                       <Button variant="outline" size="sm" className="flex-1" onClick={() => abrirEdicion(c)}>
-                        {pendiente ? "Registrar depósito" : "Editar"}
+                        {pendiente && puedeConciliar ? "Registrar depósito" : "Editar"}
                       </Button>
                     )}
                     {puedeBorrar && (
