@@ -6,8 +6,9 @@ const PROVEEDORES = ["zernio", "meta"];
 const TONOS = ["profesional", "amigable", "directo"];
 // Kept in step with the model table the agent's brain documents. An unknown id
 // would only surface as a 404 from the API, hours later, in a background job
-// nobody is watching.
-const MODELOS = ["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"];
+// nobody is watching. Every model here must accept adaptive thinking + effort,
+// which _brain.ts always sends — Haiku 4.5 does not, hence Haiku 5.5.
+const MODELOS = ["claude-opus-5", "claude-sonnet-5", "claude-haiku-5-5"];
 
 // Creates or updates this restaurant's agent configuration.
 //
@@ -72,9 +73,26 @@ export async function handle(req: Request): Promise<Response> {
       patch.numero_visible = numero;
     }
 
+    const existingRows = await g.sr.entities.WhatsAppConfig.filter({ business_id: g.businessId }, null, 1);
+    const existing = existingRows?.[0] || null;
+
     for (const campo of ["provider_account_id", "provider_phone_number_id"]) {
       if (body[campo] === undefined) continue;
       const valor = String(body[campo]).trim();
+      // Nothing proves this id belongs to the caller (the provider credentials
+      // are platform-wide), so the least we can do is stop a tenant from
+      // hopping to — or vacating and re-claiming — another id once one is set.
+      // Only the platform admin changes a connected id; owners ask support.
+      const actual = String(existing?.[campo] || "");
+      if (actual && valor !== actual && g.user.role !== "admin") {
+        return Response.json(
+          {
+            message:
+              "El identificador de WhatsApp ya está conectado. Para cambiarlo o desconectarlo, escríbenos a soporte.",
+          },
+          { status: 403 },
+        );
+      }
       if (valor) {
         const claimed = await g.sr.entities.WhatsAppConfig.filter({ [campo]: valor }, null, 5);
         const ajeno = (claimed || []).find(
@@ -96,9 +114,6 @@ export async function handle(req: Request): Promise<Response> {
     if (Object.keys(patch).length === 0) {
       return Response.json({ message: "No mandaste ningún cambio." }, { status: 400 });
     }
-
-    const existingRows = await g.sr.entities.WhatsAppConfig.filter({ business_id: g.businessId }, null, 1);
-    const existing = existingRows?.[0] || null;
 
     // Turning the agent on without a way to receive messages produces a
     // configuration that looks live and answers nothing.

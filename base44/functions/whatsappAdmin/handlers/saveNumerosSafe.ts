@@ -58,10 +58,12 @@ export async function handle(req: Request): Promise<Response> {
           { status: 400 },
         );
       }
-      // The webhook matches on the last 10 digits, so two entries that differ
-      // only by prefix are the same person — and if they carried different
-      // roles, which one wins would be down to array order.
-      const clave = numero.replace(/[^\d]/g, "").slice(-10);
+      // The same key the webhook matches on (claveTelefono in
+      // whatsapp/handlers/_reglas.ts): the full number, with +52 and +521
+      // folded together. Two entries with one key are the same person — and if
+      // they carried different roles, which one wins would be down to array order.
+      const digitos = numero.replace(/[^\d]/g, "");
+      const clave = /^521\d{10}$/.test(digitos) ? `52${digitos.slice(3)}` : digitos;
       if (vistos.has(clave)) {
         return Response.json({ message: `El número ${numero} está repetido en la lista.` }, { status: 400 });
       }
