@@ -30,6 +30,9 @@
   },
   "required": ["business_id", "conversacion_id", "direccion"],
   "rls": {
+    // Writes: service role only (role:admin). Every write goes through a Safe
+    // function (_guard.ts: tenant, permission key, billing) — a tenant branch
+    // here would let any member skip all three from the browser via the SDK.
     "create": { "user_condition": { "role": "admin" } },
     "read": {
       "$or": [
@@ -38,11 +41,6 @@
       ]
     },
     "update": { "user_condition": { "role": "admin" } },
-    "delete": {
-      "$or": [
-        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
-        { "user_condition": { "role": "admin" } }
-      ]
-    }
+    "delete": { "user_condition": { "role": "admin" } }
   }
 }

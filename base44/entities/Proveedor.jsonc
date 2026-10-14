@@ -16,32 +16,20 @@
     "activo": { "type": "boolean", "default": true }
   },
   "required": ["business_id", "nombre"],
-  // RLS (Module 4): catálogo — create/update/delete sólo business_admin (más el
-  // servicio). staff lee, para poder elegir proveedor al capturar un gasto.
+  // RLS (Module 4): catálogo — create/update/delete sólo por la función Safe
+  // (Proveedores:*). staff lee, para poder elegir proveedor al capturar un gasto.
   "rls": {
-    "create": {
-      "$or": [
-        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
-        { "user_condition": { "role": "admin" } }
-      ]
-    },
+    // Writes: service role only (role:admin). Every write goes through a Safe
+    // function (_guard.ts: tenant, permission key, billing) — a tenant branch
+    // here would let any member skip all three from the browser via the SDK.
+    "create": { "user_condition": { "role": "admin" } },
     "read": {
       "$or": [
         { "data.business_id": "{{user.data.business_id}}" },
         { "user_condition": { "role": "admin" } }
       ]
     },
-    "update": {
-      "$or": [
-        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
-        { "user_condition": { "role": "admin" } }
-      ]
-    },
-    "delete": {
-      "$or": [
-        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
-        { "user_condition": { "role": "admin" } }
-      ]
-    }
+    "update": { "user_condition": { "role": "admin" } },
+    "delete": { "user_condition": { "role": "admin" } }
   }
 }

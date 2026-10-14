@@ -70,32 +70,21 @@
     "ultimo_error": { "type": "string", "description": "Último error del webhook, para que el dueño vea que algo se rompió sin abrir logs" }
   },
   "required": ["business_id"],
-  // RLS (Module 4): configurar el agente es cosa del dueño. staff puede leerla
-  // (la UI muestra el estado del agente en el panel), nunca escribirla.
+  // RLS (Module 4): configurar el agente es cosa del dueño, por whatsappAdmin
+  // (WhatsApp:configure / WhatsApp:manage_numbers). staff puede leerla (la UI
+  // muestra el estado del agente en el panel); nadie la escribe directo.
   "rls": {
-    "create": {
-      "$or": [
-        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
-        { "user_condition": { "role": "admin" } }
-      ]
-    },
+    // Writes: service role only (role:admin). Every write goes through a Safe
+    // function (_guard.ts: tenant, permission key, billing) — a tenant branch
+    // here would let any member skip all three from the browser via the SDK.
+    "create": { "user_condition": { "role": "admin" } },
     "read": {
       "$or": [
         { "data.business_id": "{{user.data.business_id}}" },
         { "user_condition": { "role": "admin" } }
       ]
     },
-    "update": {
-      "$or": [
-        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
-        { "user_condition": { "role": "admin" } }
-      ]
-    },
-    "delete": {
-      "$or": [
-        { "$and": [{ "data.business_id": "{{user.data.business_id}}" }, { "user_condition": { "role": "business_admin" } }] },
-        { "user_condition": { "role": "admin" } }
-      ]
-    }
+    "update": { "user_condition": { "role": "admin" } },
+    "delete": { "user_condition": { "role": "admin" } }
   }
 }
