@@ -7,6 +7,7 @@ import { fecha, inicioDeMes, money, moneySigned, semanaLegible } from "@/lib/for
 import PageHeader from "@/components/PageHeader";
 import StatCard from "@/components/StatCard";
 import EmptyState from "@/components/EmptyState";
+import LoadError from "@/components/LoadError";
 import { Rail, Ticket } from "@/components/Ticket";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +32,7 @@ export default function Dashboard() {
   const { can } = usePermissions();
   const [datos, setDatos] = useState(null);
   const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState(false);
   const [saliendo, setSaliendo] = useState({});
 
   const verFinanzas = can("Dashboard:financials");
@@ -39,6 +41,7 @@ export default function Dashboard() {
   const cargar = useCallback(async () => {
     if (!user?.business_id) return;
     setCargando(true);
+    setErrorCarga(false);
     try {
       const scope = { business_id: user.business_id };
       const [gastos, ingresos, inventario, alertas] = await Promise.all([
@@ -49,8 +52,11 @@ export default function Dashboard() {
       ]);
       setDatos({ gastos: gastos || [], ingresos: ingresos || [], inventario: inventario || [], alertas: alertas || [] });
     } catch (error) {
+      // No empty lists here: they would render "Todo en orden" and "Nada
+      // pendiente" over depósitos faltantes the read simply didn't return.
       console.error("No se pudo cargar el resumen:", error);
-      setDatos({ gastos: [], ingresos: [], inventario: [], alertas: [] });
+      setDatos(null);
+      setErrorCarga(true);
     } finally {
       setCargando(false);
     }
@@ -117,6 +123,18 @@ export default function Dashboard() {
       });
     }
   };
+
+  if (errorCarga && !cargando) {
+    return (
+      <div>
+        <PageHeader title={business?.name || "Resumen"} />
+        <LoadError
+          message="No pudimos cargar tu resumen, así que no sabemos si hay algo pendiente. Revisa tu conexión e inténtalo otra vez."
+          onRetry={cargar}
+        />
+      </div>
+    );
+  }
 
   if (cargando || !resumen) {
     return (

@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { usePermissions } from "@/lib/PermissionContext";
 import { haceRato, mensajeDeError, money } from "@/lib/format";
+import { conRegistro, sinRegistro } from "@/lib/registros";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
@@ -108,7 +109,6 @@ export default function Inventario() {
         business_id: user.business_id,
         nombre: form.nombre.trim(),
         categoria: form.categoria,
-        stock_actual: Number(form.stock_actual || 0),
         stock_minimo: Number(form.stock_minimo || 0),
         unidad: form.unidad.trim(),
         proveedor: form.proveedor.trim(),
@@ -118,15 +118,26 @@ export default function Inventario() {
       // never touched.
       if (puedeCosto) payload.ultimo_costo = form.ultimo_costo === "" ? null : Number(form.ultimo_costo);
 
+      // Same reasoning for the stock on an edit, and more: re-sending the
+      // number the dialog opened with would overwrite any +/- adjustment made
+      // meanwhile (in the app or by WhatsApp), and trip Inventario:edit_stock
+      // for someone who never touched the field. Only an actual recount by
+      // someone allowed to do it goes out.
+      const stockCambiado = Number(form.stock_actual || 0) !== Number(editando?.stock_actual ?? 0);
+      if (!editando || (puedeStock && stockCambiado)) payload.stock_actual = Number(form.stock_actual || 0);
+
+      // The returned row goes straight into the list: re-reading right after
+      // the write can miss it (see src/lib/registros.js).
       if (editando) {
-        await base44.functions.invoke("inventario", { action: "updateItemSafe", id: editando.id, ...payload });
+        const r = await base44.functions.invoke("inventario", { action: "updateItemSafe", id: editando.id, ...payload });
+        setItems((list) => conRegistro(list, r?.data?.item));
         toast({ title: "Insumo actualizado" });
       } else {
-        await base44.functions.invoke("inventario", { action: "createItemSafe", ...payload });
+        const r = await base44.functions.invoke("inventario", { action: "createItemSafe", ...payload });
+        setItems((list) => conRegistro(list, r?.data?.item));
         toast({ title: "Insumo agregado" });
       }
       setAbierto(false);
-      cargar();
     } catch (err) {
       setError(mensajeDeError(err, "No pudimos guardar el insumo."));
     } finally {
@@ -149,7 +160,7 @@ export default function Inventario() {
       if (r?.data?.bajo_minimo) {
         toast({ title: `${item.nombre} quedó bajo el mínimo`, description: "Ya toca pedir más." });
       }
-      cargar();
+      setItems((list) => conRegistro(list, r?.data?.item));
     } catch (err) {
       toast({ title: mensajeDeError(err, "No pudimos ajustar el stock"), variant: "destructive" });
     } finally {
@@ -161,8 +172,8 @@ export default function Inventario() {
     if (!window.confirm(`¿Eliminar "${i.nombre}" del inventario?`)) return;
     try {
       await base44.functions.invoke("inventario", { action: "deleteItemSafe", id: i.id, business_id: user.business_id });
+      setItems((list) => sinRegistro(list, i.id));
       toast({ title: "Insumo eliminado" });
-      cargar();
     } catch (err) {
       toast({ title: mensajeDeError(err, "No pudimos eliminarlo"), variant: "destructive" });
     }

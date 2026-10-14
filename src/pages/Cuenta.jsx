@@ -6,6 +6,8 @@ import { ASSIGNABLE_ROLES, ROLE_LABELS, ROLES } from "@/lib/rbac";
 import { APP_VERSION, CHANGELOG, KITCHOPS_SITE_URL, RELEASE_DATE } from "@/lib/appConfig";
 import { fecha, mensajeDeError } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
+import LoadError from "@/components/LoadError";
+import { conRegistro, sinRegistro } from "@/lib/registros";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,6 +29,10 @@ import {
   X,
 } from "lucide-react";
 
+// The fields Cuenta > Equipo draws, the same cut manage-member's list_members
+// returns — applied to the full user row that approve/change_role answer with.
+const aMiembro = (u) => ({ id: u.id, email: u.email || "", full_name: u.full_name || "", role: u.role || "" });
+
 const BILLING = {
   trial: { label: "Prueba", clase: "text-copper" },
   active: { label: "Activa", clase: "text-verde" },
@@ -40,11 +46,12 @@ const BILLING = {
 // directly for them.
 export default function Cuenta() {
   const { user, business, refreshBusiness } = useAuth();
-  const { can } = usePermissions();
+  const { can, writeBlockedReason } = usePermissions();
   const { toast } = useToast();
 
   const [miembros, setMiembros] = useState([]);
   const [cargandoMiembros, setCargandoMiembros] = useState(true);
+  const [errorMiembros, setErrorMiembros] = useState(false);
   // Solicitudes de unión: quien entró con el código y espera aprobación. Cada una
   // lleva el rol que el dueño elige al aprobar (por defecto, personal de cocina).
   const [solicitudes, setSolicitudes] = useState([]);
@@ -56,9 +63,19 @@ export default function Cuenta() {
   const [borrando, setBorrando] = useState(false);
   const [exportando, setExportando] = useState(false);
 
-  const puedeMiembros = can("Cuenta:manage_members");
+  // Who sees the team and the danger zone is decided by ROLE, exactly as
+  // manage-member and delete-account decide it — not by can(), which also
+  // folds in the billing gate (a view_only owner would be told "sólo el dueño"
+  // about their own team) and staff overrides the server never honors here.
+  const esDueno = user?.role === ROLES.BUSINESS_ADMIN || user?.role === ROLES.ADMIN;
+  // Granting access (approve, change a role, rotate the code) is a write and
+  // stops while the tenant is view_only/suspended. Taking it away — remove,
+  // reject — stays open server-side, so it stays open here too.
+  const puedeMiembros = esDueno && can("Cuenta:manage_members");
   const puedePerfil = can("Cuenta:edit_profile");
-  const puedePeligro = can("Cuenta:danger_zone");
+  // delete-account checks role, tenant and the typed name — not billing. A
+  // suspended owner who wants their data gone (Module 7) must still reach it.
+  const puedePeligro = esDueno;
 
   useEffect(() => {
     if (business) {
@@ -72,46 +89,55 @@ export default function Cuenta() {
     }
   }, [business]);
 
+  // Through manage-member, not User.filter: Base44 refuses a business_admin
+  // the User listing ("Only collaborators can view the list of users"), so the
+  // list used to come back empty for the very person it is for.
   const cargarMiembros = useCallback(async () => {
-    if (!puedeMiembros || !user?.business_id) {
+    if (!esDueno || !user?.business_id) {
       setCargandoMiembros(false);
       return;
     }
     setCargandoMiembros(true);
+    setErrorMiembros(false);
     try {
-      const rows = await base44.entities.User.filter({ business_id: user.business_id });
-      setMiembros(rows || []);
+      const res = await base44.functions.invoke("manage-member", { action: "list_members" });
+      setMiembros((res?.data ?? res)?.members || []);
     } catch (e) {
       console.error(e);
+      setErrorMiembros(true);
     } finally {
       setCargandoMiembros(false);
     }
-  }, [puedeMiembros, user?.business_id]);
+  }, [esDueno, user?.business_id]);
 
   useEffect(() => { cargarMiembros(); }, [cargarMiembros]);
 
   const cargarSolicitudes = useCallback(async () => {
-    if (!puedeMiembros || !user?.business_id) return;
+    if (!esDueno || !user?.business_id) return;
     try {
       const res = await base44.functions.invoke("manage-member", { action: "list_requests" });
       setSolicitudes((res?.data ?? res)?.requests || []);
     } catch (e) {
       console.error(e);
     }
-  }, [puedeMiembros, user?.business_id]);
+  }, [esDueno, user?.business_id]);
 
   useEffect(() => { cargarSolicitudes(); }, [cargarSolicitudes]);
 
   const decidir = async (s, aprobar) => {
     setDecidiendo(s.id);
     try {
-      await base44.functions.invoke("manage-member", {
+      const res = await base44.functions.invoke("manage-member", {
         action: aprobar ? "approve_request" : "reject_request",
         memberId: s.id,
         role: rolesElegidos[s.id] || ROLES.STAFF,
       });
       toast({ title: aprobar ? "Persona aprobada" : "Solicitud rechazada" });
-      await Promise.all([cargarSolicitudes(), cargarMiembros()]);
+      // Update from the answer rather than re-reading straight after the write,
+      // which can still return the old state (see src/lib/registros.js).
+      setSolicitudes((list) => sinRegistro(list, s.id));
+      const m = res?.data?.member;
+      if (aprobar && m) setMiembros((list) => conRegistro(list, aMiembro(m)));
     } catch (err) {
       toast({ title: mensajeDeError(err, "No pudimos procesar la solicitud"), variant: "destructive" });
       cargarSolicitudes();
@@ -138,9 +164,10 @@ export default function Cuenta() {
 
   const cambiarRol = async (memberId, role) => {
     try {
-      await base44.functions.invoke("manage-member", { action: "change_role", memberId, role });
+      const res = await base44.functions.invoke("manage-member", { action: "change_role", memberId, role });
       toast({ title: "Rol actualizado" });
-      cargarMiembros();
+      const m = res?.data?.member;
+      setMiembros((list) => conRegistro(list, m ? aMiembro(m) : { ...list.find((x) => x.id === memberId), role }));
     } catch (err) {
       toast({ title: mensajeDeError(err, "No pudimos cambiar el rol"), variant: "destructive" });
     }
@@ -151,7 +178,7 @@ export default function Cuenta() {
     try {
       await base44.functions.invoke("manage-member", { action: "remove", memberId: m.id });
       toast({ title: "Persona removida" });
-      cargarMiembros();
+      setMiembros((list) => sinRegistro(list, m.id));
     } catch (err) {
       toast({ title: mensajeDeError(err, "No pudimos removerla"), variant: "destructive" });
     }
@@ -371,12 +398,19 @@ export default function Cuenta() {
 
         {/* ── Equipo ───────────────────────────────────────────────────── */}
         <TabsContent value="equipo" className="space-y-5">
-          {!puedeMiembros ? (
+          {!esDueno ? (
             <p className="rounded-lg border border-border bg-card px-6 py-12 text-center text-sm text-slate">
               Sólo el dueño o gerente ve y administra al equipo.
             </p>
           ) : (
             <>
+              {!puedeMiembros && writeBlockedReason && (
+                <p className="rounded-md border border-amber/30 bg-amber/10 p-3 text-sm leading-relaxed text-amber">
+                  {writeBlockedReason} Mientras tanto puedes ver a tu equipo, quitar a alguien y
+                  rechazar solicitudes, pero no aprobar ni cambiar roles.
+                </p>
+              )}
+
               {business?.invite_code && (
                 <section className="rounded-lg border border-border bg-card p-5">
                   <h2 className="font-display text-lg font-semibold text-chalk">Invitar a alguien</h2>
@@ -398,11 +432,13 @@ export default function Cuenta() {
                       <Copy className="mr-2 h-3.5 w-3.5" />
                       Copiar
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => rotarCodigo(false)}>
-                      <RefreshCw className="mr-2 h-3.5 w-3.5" />
-                      Generar otro
-                    </Button>
-                    {business.invite_code_active !== false && (
+                    {puedeMiembros && (
+                      <Button variant="outline" size="sm" onClick={() => rotarCodigo(false)}>
+                        <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                        Generar otro
+                      </Button>
+                    )}
+                    {puedeMiembros && business.invite_code_active !== false && (
                       <Button variant="outline" size="sm" onClick={() => rotarCodigo(true)}>
                         Desactivar
                       </Button>
@@ -437,6 +473,7 @@ export default function Cuenta() {
                         </div>
                         <div className="flex items-center gap-2">
                           <Select
+                            disabled={!puedeMiembros}
                             value={rolesElegidos[s.id] || ROLES.STAFF}
                             onValueChange={(v) => setRolesElegidos({ ...rolesElegidos, [s.id]: v })}
                           >
@@ -449,7 +486,7 @@ export default function Cuenta() {
                               ))}
                             </SelectContent>
                           </Select>
-                          <Button size="sm" disabled={decidiendo === s.id} onClick={() => decidir(s, true)}>
+                          <Button size="sm" disabled={!puedeMiembros || decidiendo === s.id} onClick={() => decidir(s, true)}>
                             {decidiendo === s.id ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Check className="mr-1.5 h-3.5 w-3.5" />}
                             Aprobar
                           </Button>
@@ -478,6 +515,10 @@ export default function Cuenta() {
 
                 {cargandoMiembros ? (
                   <p className="px-4 py-8 text-center text-sm text-slate">Cargando…</p>
+                ) : errorMiembros ? (
+                  <div className="p-4">
+                    <LoadError message="No pudimos cargar a tu equipo." onRetry={cargarMiembros} />
+                  </div>
                 ) : (
                   <ul className="divide-y divide-border">
                     {miembros.map((m) => (
@@ -496,7 +537,7 @@ export default function Cuenta() {
                           <span className="text-xs text-slate-dim">{ROLE_LABELS[m.role]}</span>
                         ) : (
                           <div className="flex items-center gap-2">
-                            <Select value={m.role} onValueChange={(v) => cambiarRol(m.id, v)}>
+                            <Select value={m.role} onValueChange={(v) => cambiarRol(m.id, v)} disabled={!puedeMiembros}>
                               <SelectTrigger className="h-9 w-44" aria-label={`Rol de ${m.email}`}>
                                 <SelectValue />
                               </SelectTrigger>

@@ -6,6 +6,7 @@ import { PERMISSION_SECTIONS, registryDefault } from "@/lib/permissionRegistry";
 import { ROLES, ROLE_DESCRIPTIONS } from "@/lib/rbac";
 import { mensajeDeError } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
+import LoadError from "@/components/LoadError";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
@@ -23,14 +24,20 @@ import { Loader2, RotateCcw, Shield } from "lucide-react";
 // another tenant's staff permissions even by calling the API directly.
 export default function Permisos() {
   const { user } = useAuth();
-  const { can, refreshOverrides } = usePermissions();
+  const { can, refreshOverrides, writeBlockedReason } = usePermissions();
   const { toast } = useToast();
 
   const [perms, setPerms] = useState({});
   const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
-  const puedeGestionar = can("Cuenta:manage_members");
+  // Seeing the matrix is a read and belongs to the owner role; saving it is a
+  // write and also passes the billing gate (savePermissionProfileSafe does).
+  // Only the role decides who sees it — never a staff override, which the
+  // server would not honor for this key anyway.
+  const puedeGestionar = user?.role === ROLES.BUSINESS_ADMIN || user?.role === ROLES.ADMIN;
+  const puedeGuardar = puedeGestionar && can("Cuenta:manage_members");
 
   const cargar = useCallback(async () => {
     if (!puedeGestionar || !user?.business_id) {
@@ -38,6 +45,7 @@ export default function Permisos() {
       return;
     }
     setCargando(true);
+    setErrorCarga(false);
     try {
       const rows = await base44.entities.PermissionProfile.filter({
         business_id: user.business_id,
@@ -45,7 +53,10 @@ export default function Permisos() {
       });
       setPerms(rows?.[0]?.permissions || {});
     } catch (e) {
+      // Never let a profile that couldn't be read be saved: {} would look like
+      // "all defaults" and saving it would hand back every revoked permission.
       console.error(e);
+      setErrorCarga(true);
     } finally {
       setCargando(false);
     }
@@ -106,6 +117,18 @@ export default function Permisos() {
     );
   }
 
+  if (errorCarga) {
+    return (
+      <div>
+        <PageHeader title="Permisos" />
+        <LoadError
+          message="No pudimos cargar los permisos del personal. Para no borrar lo que ya configuraste, inténtalo otra vez antes de cambiar algo."
+          onRetry={cargar}
+        />
+      </div>
+    );
+  }
+
   const cambios = Object.keys(perms).length;
 
   return (
@@ -114,12 +137,18 @@ export default function Permisos() {
         title="Permisos"
         description={ROLE_DESCRIPTIONS[ROLES.STAFF]}
         action={
-          <Button onClick={guardar} disabled={guardando}>
-            {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Guardar
-          </Button>
+          puedeGuardar ? (
+            <Button onClick={guardar} disabled={guardando}>
+              {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Guardar
+            </Button>
+          ) : null
         }
       />
+
+      {writeBlockedReason && (
+        <p className="mb-5 rounded-md border border-amber/30 bg-amber/10 p-3 text-sm text-amber">{writeBlockedReason}</p>
+      )}
 
       <p className="mb-6 rounded-md border border-border bg-steel-high/40 p-3 text-sm leading-relaxed text-slate">
         Estos permisos aplican al <strong className="text-chalk">personal de cocina</strong>. El
@@ -154,6 +183,7 @@ export default function Permisos() {
                         <button
                           type="button"
                           onClick={() => restablecer(key)}
+                          disabled={!puedeGuardar}
                           className="mt-0.5 inline-flex items-center gap-1 font-mono text-[0.6875rem] text-copper hover:underline"
                         >
                           <RotateCcw className="h-2.5 w-2.5" aria-hidden="true" />
@@ -168,6 +198,7 @@ export default function Permisos() {
                     <Switch
                       checked={valor}
                       onCheckedChange={(v) => alternar(key, v)}
+                      disabled={!puedeGuardar}
                       aria-label={label}
                     />
                   </li>
@@ -178,12 +209,14 @@ export default function Permisos() {
         ))}
       </div>
 
-      <div className="mt-6">
-        <Button onClick={guardar} disabled={guardando}>
-          {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Guardar permisos
-        </Button>
-      </div>
+      {puedeGuardar && (
+        <div className="mt-6">
+          <Button onClick={guardar} disabled={guardando}>
+            {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Guardar permisos
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

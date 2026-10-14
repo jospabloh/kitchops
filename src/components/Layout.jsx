@@ -21,7 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/lib/PermissionContext";
 import { useAuth } from "@/lib/AuthContext";
-import { ROLE_LABELS } from "@/lib/rbac";
+import { ROLE_LABELS, ROLES } from "@/lib/rbac";
 import { LogoMark } from "@/components/Logo";
 
 // Grouped, because a flat list of twelve links makes everything look equally
@@ -55,7 +55,9 @@ const GRUPOS = [
       { path: "/whatsapp", label: "WhatsApp", icon: MessageCircle, permission: "WhatsApp:view" },
       { path: "/bitacora", label: "Bitácora", icon: ScrollText, permission: "Bitacora:view" },
       { path: "/configuracion", label: "Configuración", icon: Settings, permission: "Configuracion:view" },
-      { path: "/permisos", label: "Permisos", icon: Shield, permission: "Cuenta:manage_members" },
+      // Gated by role, exactly like Permisos.jsx: the screen opens read-only in
+      // view_only/suspended, so a billing-blocked write key must not hide it.
+      { path: "/permisos", label: "Permisos", icon: Shield, roles: [ROLES.BUSINESS_ADMIN, ROLES.ADMIN] },
       { path: "/cuenta", label: "Cuenta", icon: UserCircle },
     ],
   },
@@ -92,7 +94,9 @@ export default function Layout() {
 
   const grupos = GRUPOS.map((g) => ({
     ...g,
-    items: g.items.filter((i) => !i.permission || can(i.permission)),
+    items: g.items.filter(
+      (i) => (!i.permission || can(i.permission)) && (!i.roles || i.roles.includes(user?.role)),
+    ),
   })).filter((g) => g.items.length > 0);
 
   const banner = BANNER[business?.billing_status];

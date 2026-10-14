@@ -50,14 +50,18 @@ export function PermissionProvider({ children }) {
   }, [loadOverrides]);
 
   const can = useMemo(() => {
-    return (key) => {
+    // `ignoreBilling` mirrors the server's `guard(..., { ignoreBillingBlock })`.
+    // Use it ONLY where the Safe function behind the button skips the billing
+    // gate too (opening a support ticket), so the screen never offers less — or
+    // more — than the server allows.
+    return (key, { ignoreBilling = false } = {}) => {
       if (!user) return false;
       if (user.role === ROLES.ADMIN) return true;
 
       // Module 1's read-only degrade. Only writes are blocked: a view_only
       // tenant that can't read its own books isn't "view only", it's broken.
       const blocked = business?.billing_status === "view_only" || business?.billing_status === "suspended";
-      if (blocked && isWriteKey(key)) return false;
+      if (blocked && !ignoreBilling && isWriteKey(key)) return false;
 
       const roleOverrides = user.role === ROLES.STAFF ? overrides : null;
       return resolvePermission(key, user.role, roleOverrides);

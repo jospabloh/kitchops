@@ -108,13 +108,15 @@ export default function WhatsAppPage() {
   const guardarConfig = async () => {
     setGuardando(true);
     try {
-      await base44.functions.invoke("whatsappAdmin", {
+      const r = await base44.functions.invoke("whatsappAdmin", {
         action: "saveConfigSafe",
         business_id: user.business_id,
         ...form,
       });
       toast({ title: "Configuración guardada" });
-      cargar();
+      // Keep the saved row instead of re-reading: a read right after the write
+      // can return the old config and reset the form to it (src/lib/registros.js).
+      if (r?.data?.config) setConfig(r.data.config);
     } catch (err) {
       toast({ title: mensajeDeError(err, "No pudimos guardar"), variant: "destructive" });
     } finally {
@@ -125,13 +127,17 @@ export default function WhatsAppPage() {
   const guardarNumeros = async () => {
     setGuardando(true);
     try {
-      await base44.functions.invoke("whatsappAdmin", {
+      const r = await base44.functions.invoke("whatsappAdmin", {
         action: "saveNumerosSafe",
         business_id: user.business_id,
         numeros,
       });
       toast({ title: "Lista de números actualizada" });
-      cargar();
+      // Same as above: the saved row, not a re-read that may predate it.
+      if (r?.data?.config) {
+        setConfig(r.data.config);
+        if (Array.isArray(r.data.config.numeros_autorizados)) setNumeros(r.data.config.numeros_autorizados);
+      }
     } catch (err) {
       toast({ title: mensajeDeError(err, "No pudimos guardar los números"), variant: "destructive" });
     } finally {
