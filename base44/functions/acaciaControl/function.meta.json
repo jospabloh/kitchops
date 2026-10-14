@@ -1,0 +1,119 @@
+{
+  "name": "acaciaControl",
+  "purpose": "Puente firmado (HMAC con la llave derivada de la app, Módulo 15) por el que Mission Control lee y escribe esta app como servicio: licencias, uso, tickets, sesiones y correos de seguimiento. Ve todos los inquilinos a propósito; las entidades de lectura y escritura las nombra Mission Control en cada llamada (las de abajo son las de su configuración para KitchOps).",
+  "status": "active",
+  "created": "2026-08-19",
+  "triggers": [
+    "external:mission-control"
+  ],
+  "auth": "hmac",
+  "tenant_scoped": false,
+  "entities": {
+    "reads": [
+      "AppSession",
+      "Business",
+      "Gasto",
+      "IngresoPlataforma",
+      "InventarioItem",
+      "SupportTicket",
+      "SupportTicketMessage",
+      "User"
+    ],
+    "writes": [
+      "AppSession",
+      "Business",
+      "SupportTicket",
+      "SupportTicketMessage"
+    ]
+  },
+  "tests": [],
+  "actions": {
+    "ping": {
+      "purpose": "Sonda de salud: Mission Control la usa para la fila diaria de app_health.",
+      "callers": [
+        "external:mission-control:api/_lib/sync/syncHealth.js"
+      ]
+    },
+    "licenses.list": {
+      "purpose": "Lista los Business (la licencia) para el sync de licencias.",
+      "callers": [
+        "external:mission-control:api/_lib/sync/syncLicenses.js"
+      ]
+    },
+    "usage.summary": {
+      "purpose": "Cuenta registros de Gasto/IngresoPlataforma/InventarioItem como señal de uso.",
+      "callers": [
+        "external:mission-control:api/_lib/sync/syncUsage.js"
+      ]
+    },
+    "emails.status": {
+      "purpose": "Historial de correos de un inquilino desde la entidad de bitácora de correo. KitchOps no tiene esa entidad y Mission Control no configura email_log para esta app, así que hoy nadie la llama aquí; el bridge es el mismo archivo en todo el portafolio.",
+      "callers": []
+    },
+    "license.set": {
+      "purpose": "Escribe billing_status, plan y fechas del Business. Único escritor de billing_status (Módulo 1).",
+      "callers": [
+        "external:mission-control:api/_lib/control/license-action.js",
+        "external:mission-control:api/_lib/control/payment-confirm.js",
+        "external:mission-control:api/cron/license-lifecycle.js",
+        "external:mission-control:api/cron/renewal-reminders.js"
+      ]
+    },
+    "emails.sendFollowup": {
+      "purpose": "Envía un correo que Mission Control ya redactó (seguimiento, aviso de alta, aviso de ticket).",
+      "callers": [
+        "external:mission-control:api/_lib/emailFollowup.js",
+        "external:mission-control:api/_lib/newTenantAlert.js",
+        "external:mission-control:api/_lib/ingestTicket.js"
+      ]
+    },
+    "tenants.contacts": {
+      "purpose": "Resuelve los business_admin de cada Business como destinatarios.",
+      "callers": [
+        "external:mission-control:api/_lib/emailFollowup.js"
+      ]
+    },
+    "usage.byTenant": {
+      "purpose": "Cuenta registros por business_id, sin datos del registro.",
+      "callers": [
+        "external:mission-control:api/_lib/control/usage-by-tenant.js"
+      ]
+    },
+    "tickets.list": {
+      "purpose": "Lista SupportTicket para el sync diario y para el aviso en tiempo real (ticket-pull, que Soporte.jsx dispara al crear un ticket).",
+      "callers": [
+        "external:mission-control:api/_lib/sync/syncTickets.js",
+        "external:mission-control:api/_lib/ingest/ticket-pull.js"
+      ]
+    },
+    "tickets.thread": {
+      "purpose": "Mensajes de un ticket (SupportTicketMessage).",
+      "callers": [
+        "external:mission-control:api/_lib/control/tickets.js"
+      ]
+    },
+    "tickets.update": {
+      "purpose": "Respuesta de soporte y cambio de estado de un ticket.",
+      "callers": [
+        "external:mission-control:api/_lib/control/tickets.js",
+        "external:mission-control:api/_lib/sweepResolvedTickets.js",
+        "external:mission-control:api/_lib/sync/autoCloseResolved.js"
+      ]
+    },
+    "sessions.list": {
+      "purpose": "Lista AppSession para el panel de sesiones.",
+      "callers": [
+        "external:mission-control:api/_lib/sync/syncSessions.js",
+        "external:mission-control:api/_lib/control/sessions.js",
+        "external:mission-control:api/_lib/control/session-revoke.js"
+      ]
+    },
+    "sessions.revoke": {
+      "purpose": "Marca sesiones como revocadas (cierre de sesión remoto).",
+      "callers": [
+        "external:mission-control:api/_lib/control/session-revoke.js"
+      ]
+    }
+  },
+  "remove_when": null
+}

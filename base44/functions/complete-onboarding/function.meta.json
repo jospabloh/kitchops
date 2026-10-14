@@ -1,0 +1,55 @@
+{
+  "name": "complete-onboarding",
+  "purpose": "Alta de una cuenta en un restaurante: crear uno nuevo (queda business_admin, prueba de 30 días) o solicitar unirse con código. Único escritor de role/business_id en el alta.",
+  "status": "active",
+  "created": "2026-08-19",
+  "triggers": [
+    "frontend"
+  ],
+  "auth": "user",
+  "tenant_scoped": true,
+  "entities": {
+    "reads": [
+      "AppSettings",
+      "Business",
+      "User"
+    ],
+    "writes": [
+      "AppSettings",
+      "AuditLog",
+      "Business",
+      "User"
+    ]
+  },
+  "tests": [
+    "base44/tests/join_requests_test.ts",
+    "base44/tests/trial_days_test.ts"
+  ],
+  "actions": {
+    "create": {
+      "purpose": "Crea el Business, siembra AppSettings y deja a quien llama como business_admin (o conserva admin de plataforma).",
+      "callers": [
+        "src/pages/Onboarding.jsx"
+      ]
+    },
+    "join": {
+      "purpose": "Registra una solicitud pendiente (User.pending_business_id) con el código de invitación; no da acceso.",
+      "callers": [
+        "src/pages/Onboarding.jsx"
+      ]
+    },
+    "status": {
+      "purpose": "Devuelve la solicitud pendiente de quien llama (sobrevive a recargar).",
+      "callers": [
+        "src/pages/Onboarding.jsx"
+      ]
+    },
+    "cancel": {
+      "purpose": "Retira la solicitud pendiente de quien llama.",
+      "callers": [
+        "src/pages/Onboarding.jsx"
+      ]
+    }
+  },
+  "remove_when": null
+}

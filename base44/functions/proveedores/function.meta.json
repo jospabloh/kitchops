@@ -1,0 +1,47 @@
+{
+  "name": "proveedores",
+  "purpose": "Router de escritura de proveedores (Proveedor).",
+  "status": "active",
+  "created": "2026-08-19",
+  "triggers": [
+    "frontend"
+  ],
+  "auth": "user",
+  "tenant_scoped": true,
+  "entities": {
+    "reads": [
+      "Business",
+      "Gasto",
+      "PermissionProfile",
+      "Proveedor"
+    ],
+    "writes": [
+      "AuditLog",
+      "Proveedor"
+    ]
+  },
+  "tests": [
+    "base44/tests/permissions_test.ts"
+  ],
+  "actions": {
+    "createProveedorSafe": {
+      "purpose": "Da de alta un proveedor (Proveedores:create).",
+      "callers": [
+        "src/pages/Proveedores.jsx"
+      ]
+    },
+    "updateProveedorSafe": {
+      "purpose": "Edita un proveedor (Proveedores:edit).",
+      "callers": [
+        "src/pages/Proveedores.jsx"
+      ]
+    },
+    "deleteProveedorSafe": {
+      "purpose": "Borra un proveedor, o lo desactiva si tiene gastos registrados (Proveedores:delete).",
+      "callers": [
+        "src/pages/Proveedores.jsx"
+      ]
+    }
+  },
+  "remove_when": null
+}

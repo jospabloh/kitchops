@@ -1,0 +1,46 @@
+{
+  "name": "gastos",
+  "purpose": "Router de escritura de gastos (Gasto) con permiso, inquilino y facturación re-verificados en el servidor.",
+  "status": "active",
+  "created": "2026-08-19",
+  "triggers": [
+    "frontend"
+  ],
+  "auth": "user",
+  "tenant_scoped": true,
+  "entities": {
+    "reads": [
+      "Business",
+      "Gasto",
+      "PermissionProfile"
+    ],
+    "writes": [
+      "AuditLog",
+      "Gasto"
+    ]
+  },
+  "tests": [
+    "base44/tests/permissions_test.ts"
+  ],
+  "actions": {
+    "createGastoSafe": {
+      "purpose": "Registra un gasto (Gastos:create).",
+      "callers": [
+        "src/pages/Gastos.jsx"
+      ]
+    },
+    "updateGastoSafe": {
+      "purpose": "Edita un gasto; facturado y pagado llevan sus propias llaves (Gastos:edit, :mark_facturado, :mark_pagado).",
+      "callers": [
+        "src/pages/Gastos.jsx"
+      ]
+    },
+    "deleteGastoSafe": {
+      "purpose": "Borra un gasto y deja el registro completo en AuditLog (Gastos:delete).",
+      "callers": [
+        "src/pages/Gastos.jsx"
+      ]
+    }
+  },
+  "remove_when": null
+}

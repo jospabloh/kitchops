@@ -1,0 +1,47 @@
+{
+  "name": "business",
+  "purpose": "Router de los datos del propio negocio: perfil, configuración de umbrales y código de invitación.",
+  "status": "active",
+  "created": "2026-08-19",
+  "triggers": [
+    "frontend"
+  ],
+  "auth": "user",
+  "tenant_scoped": true,
+  "entities": {
+    "reads": [
+      "AppSettings",
+      "Business",
+      "PermissionProfile"
+    ],
+    "writes": [
+      "AppSettings",
+      "AuditLog",
+      "Business"
+    ]
+  },
+  "tests": [
+    "base44/tests/permissions_test.ts"
+  ],
+  "actions": {
+    "updateBusinessSafe": {
+      "purpose": "Edita el perfil del restaurante con lista blanca de campos: nunca toca billing_status ni la licencia (Cuenta:edit_profile).",
+      "callers": [
+        "src/pages/Cuenta.jsx"
+      ]
+    },
+    "saveAppSettingsSafe": {
+      "purpose": "Crea o actualiza AppSettings (umbrales de alertas) del negocio (Configuracion:edit).",
+      "callers": [
+        "src/pages/Configuracion.jsx"
+      ]
+    },
+    "rotateInviteCodeSafe": {
+      "purpose": "Rota o desactiva el código de invitación (Cuenta:manage_members).",
+      "callers": [
+        "src/pages/Cuenta.jsx"
+      ]
+    }
+  },
+  "remove_when": null
+}

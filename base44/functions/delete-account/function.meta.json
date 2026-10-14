@@ -1,0 +1,44 @@
+{
+  "name": "delete-account",
+  "purpose": "Zona de peligro (Módulo 7): borra todos los datos del restaurante tras confirmar su nombre exacto. No borra cuentas User; las libera a onboarding.",
+  "status": "active",
+  "created": "2026-08-19",
+  "triggers": [
+    "frontend"
+  ],
+  "auth": "user",
+  "tenant_scoped": true,
+  "entities": {
+    "reads": [
+      "Business",
+      "User"
+    ],
+    "writes": [
+      "Alerta",
+      "AppSettings",
+      "AuditLog",
+      "Business",
+      "Gasto",
+      "IngresoPlataforma",
+      "InventarioItem",
+      "PermissionProfile",
+      "Proveedor",
+      "SupportTicket",
+      "SupportTicketMessage",
+      "User",
+      "WhatsAppConfig",
+      "WhatsAppConversacion",
+      "WhatsAppMensaje"
+    ]
+  },
+  "tests": [],
+  "actions": {
+    "default": {
+      "purpose": "Borra el negocio indicado; sólo su business_admin o el admin de plataforma.",
+      "callers": [
+        "src/pages/Cuenta.jsx"
+      ]
+    }
+  },
+  "remove_when": null
+}

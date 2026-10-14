@@ -1,0 +1,52 @@
+{
+  "name": "inventario",
+  "purpose": "Router de escritura de insumos (InventarioItem); el stock se ajusta por delta, nunca por valor absoluto.",
+  "status": "active",
+  "created": "2026-08-19",
+  "triggers": [
+    "frontend"
+  ],
+  "auth": "user",
+  "tenant_scoped": true,
+  "entities": {
+    "reads": [
+      "Business",
+      "InventarioItem",
+      "PermissionProfile"
+    ],
+    "writes": [
+      "AuditLog",
+      "InventarioItem"
+    ]
+  },
+  "tests": [
+    "base44/tests/permissions_test.ts"
+  ],
+  "actions": {
+    "createItemSafe": {
+      "purpose": "Da de alta un insumo (Inventario:create; el costo pide Inventario:edit_costo).",
+      "callers": [
+        "src/pages/Inventario.jsx"
+      ]
+    },
+    "updateItemSafe": {
+      "purpose": "Edita un insumo (Inventario:edit_item; el costo pide Inventario:edit_costo).",
+      "callers": [
+        "src/pages/Inventario.jsx"
+      ]
+    },
+    "ajustarStockSafe": {
+      "purpose": "Ajusta el stock por delta (Inventario:edit_stock).",
+      "callers": [
+        "src/pages/Inventario.jsx"
+      ]
+    },
+    "deleteItemSafe": {
+      "purpose": "Borra un insumo (Inventario:delete).",
+      "callers": [
+        "src/pages/Inventario.jsx"
+      ]
+    }
+  },
+  "remove_when": null
+}

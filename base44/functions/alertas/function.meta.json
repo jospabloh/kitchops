@@ -1,0 +1,45 @@
+{
+  "name": "alertas",
+  "purpose": "Router de las alertas del inquilino: recalcularlas bajo demanda y marcarlas como leídas.",
+  "status": "active",
+  "created": "2026-08-19",
+  "triggers": [
+    "frontend"
+  ],
+  "auth": "user",
+  "tenant_scoped": true,
+  "entities": {
+    "reads": [
+      "Alerta",
+      "AppSettings",
+      "Business",
+      "Gasto",
+      "IngresoPlataforma",
+      "InventarioItem",
+      "PermissionProfile"
+    ],
+    "writes": [
+      "Alerta",
+      "AuditLog"
+    ]
+  },
+  "tests": [
+    "base44/tests/permissions_test.ts"
+  ],
+  "actions": {
+    "generarAlertasSafe": {
+      "purpose": "Botón \"Recalcular\": corre el motor de alertas sólo para el negocio de quien llama (Alertas:generate). Hoy es la ÚNICA vía por la que se generan alertas: el barrido nocturno generarAlertas no lo programa nada.",
+      "callers": [
+        "src/pages/Alertas.jsx"
+      ]
+    },
+    "markReadSafe": {
+      "purpose": "Marca una, varias o todas las alertas abiertas como leídas (Alertas:mark_read).",
+      "callers": [
+        "src/pages/Alertas.jsx",
+        "src/pages/Dashboard.jsx"
+      ]
+    }
+  },
+  "remove_when": null
+}
