@@ -52,10 +52,21 @@ npx base44 site deploy -y --app-id "<appId>"            # publishes the built si
   Lint, build and the Deno tests all pass in that state; only the deploy fails.
   Prefer `fetch` over an npm SDK in function code.
 - **`unchanged` after a failed deploy is still worth verifying.** Confirm from
-  the outside rather than from the CLI's label: an unsigned POST to
-  `https://<app-subdomain>.base44.app/api/apps/<appId>/functions/<name>` returns
-  `401` when the function is live, `500` when its bundle fails to load, `404`
-  when it was never deployed. Note the **app subdomain** — the platform domain
-  (`app.base44.com`) 403s all backend-function requests.
+  the outside rather than from the CLI's label, with an unsigned POST of `{}` to
+  `https://<app-subdomain>.base44.app/api/apps/<appId>/functions/<name>`. The
+  status code alone does not say "live": it depends on what the function checks
+  first. Measured against this app on 2026-10-13:
+  - `401` — secret- or signature-gated (`health`, `generarAlertas`, `whatsapp`).
+  - `400` with the function's own message — action dispatchers that validate
+    the body first (`gastos`, `soporte`, `business`, `acaciaControl`).
+  - `500 {"message":"Authentication required to view users"}` — functions that
+    call `auth.me()` first (`complete-onboarding`, `manage-member`,
+    `delete-account`). This 500 means the bundle loaded and ran; it is the SDK
+    rejecting the missing session.
+  - `404 "Backend function '<name>' not found or not deployed"` — never deployed.
+  A bundle that fails to load also comes back as a 500 (not reproduced here), so
+  read the body, not just the code. None of these prove which version is live; only
+  a call with a real session does. Note the **app subdomain**: the platform
+  domain (`app.base44.com`) 403s all backend-function requests.
 - `entities push` overwrites the deployed schema with the local `.jsonc` and
   deletes any entity not present locally. It prompts first; read the list.
