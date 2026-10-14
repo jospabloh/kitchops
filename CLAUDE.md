@@ -692,7 +692,9 @@ los campos nuevos; un campo fuera del esquema desplegado se descarta en silencio
    con su `rls.write` de admin, y sin bloque `rls` de entidad.
 2. `npm run deploy` (`complete-onboarding`, `manage-member`, `delete-account`) y
    verificar por comportamiento: `manage-member` con `{"action":"list_requests"}`
-   sin sesión responde 401; con código viejo responde `action debe ser...`.
+   sin sesión responde `500 "Authentication required to view users"` (medido el
+   2026-10-13, no 401), lo que sólo prueba que está viva. La versión sólo se
+   distingue con sesión: el código viejo responde `action debe ser...`.
 3. `npm run deploy:site`. Si el sitio saliera antes que las funciones, "Unirme"
    entraría directo (comportamiento viejo) y Cuenta no vería solicitudes.
 Si algún usuario ya se unió por código antes de esto, sigue con su rol `staff`:
