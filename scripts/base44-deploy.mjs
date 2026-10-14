@@ -135,8 +135,15 @@ function run(args) {
 // `--site` es el frontend y nada más: un cambio de UI no tiene por qué volver a
 // recorrer 45 funciones, y separarlo hace que el paso que faltaba sea el que se
 // corre a propósito.
+//
+// `--yes --build`: sin `--yes` la CLI se niega a correr sin TTY ("--yes is
+// required in non-interactive mode"), así que `npm run deploy:site` fallaba
+// siempre desde un agente o CI. `--build` corre el `buildCommand` de
+// base44/config.jsonc antes de subir, para que nunca se publique un `dist/`
+// viejo de otro checkout. Este paso no destruye nada, así que no pide
+// confirmación; `entities push` sí la pide.
 const steps = deploySite
-  ? [['site', 'deploy', '--app-id', config.appId]]
+  ? [['site', 'deploy', '--app-id', config.appId, '--yes', '--build']]
   : [['functions', 'deploy', '--app-id', config.appId, '--force']];
 
 if (pushEntities) {

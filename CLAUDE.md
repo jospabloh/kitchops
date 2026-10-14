@@ -254,6 +254,11 @@ Y comprueba el resultado por **contenido**, no por hashes: el checkpoint del app
 puede reportar un `git_commit_hash` igual al HEAD de `main` mientras el árbol que
 de verdad se sirve está atrasado.
 
+`deploy:site` corre `base44 site deploy --yes --build` (2026-10-13): sin `--yes`
+la CLI se niega a correr sin terminal, así que el script fallaba siempre desde un
+agente o CI; `--build` reconstruye `dist/` con el `buildCommand` de
+`base44/config.jsonc` antes de subir, para no publicar un build viejo.
+
 `scripts/base44-deploy.mjs` **rechaza** un `--app-id` por argumento, así que el
 directorio y la app destino no pueden desalinearse. `deploy:entities` imprime la
 lista de entidades y el nombre de la app antes de pedir confirmación — ver
@@ -610,7 +615,11 @@ para el caso de una sola membresía).
 - `User.jsonc` ya no nombra `switch-tenant` entre los escritores legítimos de
   `business_id`.
 
-### Pendiente a mano: borrar `Membership` del esquema desplegado
+### Hecho: `Membership` ya no está en el esquema desplegado
+
+**Verificado el 2026-10-13** con `list_entity_schemas`: 17 entidades, sin
+`Membership`. Lo de abajo queda como registro de por qué hubo que borrar la fila
+antes del push.
 
 El repo ya no la tiene y nadie la lee ni la escribe, pero **el esquema
 desplegado sí**. Sólo `npm run deploy:entities` la borra, y **va a fallar tal
@@ -689,6 +698,18 @@ los campos nuevos; un campo fuera del esquema desplegado se descarta en silencio
 Si algún usuario ya se unió por código antes de esto, sigue con su rol `staff`:
 no se migra nada.
 
+**Desplegado (comprobado el 2026-10-13).** `list_entity_schemas` muestra en `User`
+`pending_business_id` y `join_requested_at` con `rls.write` de admin y sin bloque
+`rls` de entidad. `manage-member` y `delete-account` están **vivos**: un POST sin
+sesión al subdominio de la app responde `500 "Authentication required to view
+users"`, igual que `complete-onboarding` recién desplegado ese día (una función
+que nunca se desplegó da 404). Ese 500 es el SDK rechazando `auth.me()` sin
+sesión, o sea que el bundle cargó y corrió; **no** es el 500 de un bundle que no
+carga que describe `AGENTS.md`. Que el código vivo sea el de `main` sólo se
+**infiere** del `unchanged` del `npm run deploy`: sin sesión no hay forma de
+distinguir versión. Sigue sin verificar una sesión real de solicitante y dueño
+aprobando, que es la única prueba de comportamiento.
+
 **Correcciones de la revisión de Codex (2026-09-30, PR #18).**
 - `complete-onboarding`: si la lectura fresca del `User` (service role) salió
   bien, manda la fila guardada, incluido un `pending_business_id` explícitamente
@@ -743,3 +764,9 @@ negocios **nuevos**: los existentes conservan su `trial_end_at`, no se migra nad
 `base44/tests/trial_days_test.ts` fija ambos. Para que surta efecto: desplegar la
 función `complete-onboarding` y publicar el sitio. Verificar en vivo con un negocio
 nuevo: `trial_end_at - trial_start_at` debe ser 30 días.
+
+**Desplegado el 2026-10-13**: `complete-onboarding` (único `deployed` del
+`npm run deploy`; las otras 15 `unchanged`) y el sitio. Verificado por contenido:
+el bundle servido trae "Empiezas con 30 días de prueba, sin tarjeta." y ninguna
+mención a 14 días. **No verificado:** el alta real de un negocio nuevo (necesita
+una cuenta nueva), que es lo único que prueba que la función que corre es la nueva.
