@@ -112,7 +112,7 @@ export async function evaluarAlertas(
       nuevas.push({
         ...base,
         tipo: "deposito_faltante",
-        titulo: `Depósito pendiente de ${i.plataforma}`,
+        titulo: `Depósito pendiente de ${i.plataforma} · semana ${i.semana}`,
         mensaje: `El corte de ${i.plataforma} de la semana ${i.semana} por ${money(corte, simboloMoneda)} todavía no tiene depósito registrado.`,
         severidad: "rojo",
         entidad_ref: i.id,
@@ -128,7 +128,7 @@ export async function evaluarAlertas(
     nuevas.push({
       ...base,
       tipo: "deposito_faltante",
-      titulo: `Depósito menor en ${i.plataforma}`,
+      titulo: `Depósito menor en ${i.plataforma} · semana ${i.semana}`,
       mensaje: `Semana ${i.semana}: te depositaron ${money(Math.abs(diff), simboloMoneda)} menos de lo reportado (corte ${money(corte, simboloMoneda)}, depósito ${money(Number(depositado), simboloMoneda)}).`,
       severidad: Math.abs(diff) > thresholds.deposito_diferencia_critica ? "rojo" : "amarillo",
       entidad_ref: i.id,
@@ -190,15 +190,52 @@ export async function evaluarAlertas(
 }
 
 /**
- * Persist the evaluated alerts, skipping any whose title already exists UNREAD
- * for this business.
+ * The identity of an alert, for deduplication: what it is ABOUT, never the
+ * numbers in its title.
  *
- * Title-based dedup is deliberate and it is what makes the nightly sweep safe
- * to run every night: "Stock bajo: jitomate" stays one row until someone reads
- * it, instead of accumulating one per run. The cost is that a title that stays
- * true but whose NUMBERS change (the shortfall grew) does not re-alert — the
- * body of the existing row goes stale. That trade favours an alert list people
- * still look at over one they've learned to dismiss.
+ *   - tied to a record (a cut, an item) → tipo + that record's id;
+ *   - the two portfolio-wide roll-ups (tickets sin facturar, tarjeta por
+ *     pagar) → tipo alone, since there is only ever one of each;
+ *   - anything else (gasto alto per supplier) → tipo + title.
+ *
+ * Keying on the title used to make the roll-ups pile up — their titles carry
+ * the count or the total, so every new card expense minted another unread
+ * "Tarjeta con $X por pagar" — and made deposit alerts of different weeks of
+ * the same platform collide with each other.
+ *
+ * A deposit alert on one cut has two variants that must NOT share a key:
+ * "Depósito pendiente" (no deposit yet) and "Depósito menor" (deposit landed
+ * short). The usual sequence is pending → short, and the pending row is still
+ * unread when the money arrives; one key would swallow the shortfall — the one
+ * the reconciliation exists to report. The variant comes from the title's
+ * fixed prefix (no figures in it), so rows already stored key the same way and
+ * no schema field is needed.
+ */
+export function varianteDeposito(titulo?: string): string {
+  return (titulo || "").startsWith("Depósito pendiente") ? "pendiente" : "menor";
+}
+
+export function claveAlerta(a: { tipo?: string; titulo?: string; entidad_ref?: string }): string {
+  if (a.entidad_ref) {
+    if (a.tipo === "deposito_faltante") {
+      return `${a.tipo}|ref:${a.entidad_ref}|${varianteDeposito(a.titulo)}`;
+    }
+    return `${a.tipo}|ref:${a.entidad_ref}`;
+  }
+  if (a.tipo === "ticket_pendiente" || a.tipo === "pago_pendiente") return `${a.tipo}`;
+  return `${a.tipo}|${a.titulo}`;
+}
+
+/**
+ * Persist the evaluated alerts, skipping any whose key (claveAlerta) already
+ * exists UNREAD for this business, or repeats within this same batch.
+ *
+ * Dedup is deliberate and it is what makes the nightly sweep safe to run every
+ * night: "Stock bajo: jitomate" stays one row until someone reads it, instead
+ * of accumulating one per run. The cost is that an alert that stays true but
+ * whose NUMBERS change (the shortfall grew, the card total went up) does not
+ * re-alert — the body of the existing row goes stale. That trade favours an
+ * alert list people still look at over one they've learned to dismiss.
  */
 export async function persistirAlertas(
   // deno-lint-ignore no-explicit-any
@@ -209,8 +246,14 @@ export async function persistirAlertas(
   const existentes = await sr.entities.Alerta.filter(
     { business_id: businessId, leida: false }, "-created_date", 500,
   );
-  const titulosAbiertos = new Set((existentes || []).map((a: { titulo?: string }) => a.titulo));
-  const aCrear = nuevas.filter((a) => !titulosAbiertos.has(a.titulo));
+  const vistas = new Set((existentes || []).map(claveAlerta));
+  const aCrear: AlertaNueva[] = [];
+  for (const a of nuevas) {
+    const clave = claveAlerta(a);
+    if (vistas.has(clave)) continue;
+    vistas.add(clave);
+    aCrear.push(a);
+  }
 
   let creadas = 0;
   if (aCrear.length > 0) {

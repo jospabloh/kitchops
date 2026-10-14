@@ -1,7 +1,7 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.20";
 import { guard } from "./_guard.ts";
 import { writeAudit, diffOf } from "./_audit.ts";
-import { validateIngreso, derivarConciliacion } from "./_ingresoFields.ts";
+import { validateIngreso, derivarConciliacion, tocaConciliacion } from "./_ingresoFields.ts";
 
 // Editing a cut is Ingresos:edit — EXCEPT for the deposit fields, which are the
 // reconciliation itself and carry Ingresos:conciliar. Recording "the bank paid
@@ -26,14 +26,32 @@ export async function handle(req: Request): Promise<Response> {
     const validated = validateIngreso(body, { partial: true });
     if (!validated.ok) return Response.json({ message: validated.message }, { status: 400 });
 
-    const touchesDeposit =
-      (body.monto_depositado !== undefined &&
-        String(body.monto_depositado ?? "") !== String(existing.monto_depositado ?? "")) ||
-      (body.fecha_deposito !== undefined &&
-        String(body.fecha_deposito ?? "") !== String(existing.fecha_deposito ?? ""));
+    // Any change that moves diferencia/conciliado is the reconciliation —
+    // including editing monto_corte to match a deposit already on record.
+    const touchesDeposit = tocaConciliacion(existing, validated.fields);
     if (touchesDeposit) {
       const sub = await guard(base44, body, "Ingresos:conciliar");
       if (!sub.ok) return sub.response;
+    }
+
+    // Same one-cut-per-(platform, week) rule as create: moving a cut onto a
+    // pair that already has one would double that week's revenue.
+    const plataforma = validated.fields.plataforma ?? existing.plataforma;
+    const semana = validated.fields.semana ?? existing.semana;
+    if (plataforma !== existing.plataforma || semana !== existing.semana) {
+      const otros = await g.sr.entities.IngresoPlataforma.filter(
+        { business_id: g.businessId, plataforma, semana }, null, 2,
+      );
+      const otro = (otros || []).find((r: { id?: string }) => r.id !== id);
+      if (otro) {
+        return Response.json(
+          {
+            message: `Ya existe un corte de ${plataforma} para la semana ${semana}. Edita ese en vez de mover este.`,
+            existing_id: otro.id,
+          },
+          { status: 409 },
+        );
+      }
     }
 
     const patch = { ...validated.fields, ...derivarConciliacion(existing, validated.fields) };

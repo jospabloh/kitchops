@@ -1,7 +1,7 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.20";
 import { guard } from "./_guard.ts";
 import { writeAudit } from "./_audit.ts";
-import { validateIngreso, derivarConciliacion } from "./_ingresoFields.ts";
+import { validateIngreso, derivarConciliacion, tocaConciliacion } from "./_ingresoFields.ts";
 
 export async function handle(req: Request): Promise<Response> {
   try {
@@ -13,6 +13,14 @@ export async function handle(req: Request): Promise<Response> {
 
     const validated = validateIngreso(body);
     if (!validated.ok) return Response.json({ message: validated.message }, { status: 400 });
+
+    // A cut born with its deposit is a cut born reconciled: same key the edit
+    // path and the WhatsApp tool demand for recording the deposit.
+    const concilia = tocaConciliacion(null, validated.fields);
+    if (concilia) {
+      const sub = await guard(base44, body, "Ingresos:conciliar");
+      if (!sub.ok) return sub.response;
+    }
 
     // One cut per (platform, week). Capturing the same week twice — easy to do
     // when two people are catching up on a backlog — would double that week's
@@ -39,11 +47,30 @@ export async function handle(req: Request): Promise<Response> {
       origen: "app",
     });
 
+    // The duplicate check above is read-then-write, so two creates at once can
+    // both pass it. Re-read the pair: the oldest row wins and every other one
+    // removes itself, so concurrent callers converge on exactly one cut.
+    const pareja = await g.sr.entities.IngresoPlataforma.filter({
+      business_id: g.businessId,
+      plataforma: validated.fields.plataforma,
+      semana: validated.fields.semana,
+    }, "created_date", 2);
+    if (pareja?.length > 1 && pareja[0].id !== ingreso.id) {
+      await g.sr.entities.IngresoPlataforma.delete(ingreso.id);
+      return Response.json(
+        {
+          message: `Ya existe un corte de ${validated.fields.plataforma} para la semana ${validated.fields.semana}. Edítalo en vez de crear otro.`,
+          existing_id: pareja[0].id,
+        },
+        { status: 409 },
+      );
+    }
+
     await writeAudit(g.sr, {
       businessId: g.businessId,
       actorEmail: g.user.email,
       actorRole: g.user.role,
-      action: "Ingresos:create",
+      action: concilia ? "Ingresos:conciliar" : "Ingresos:create",
       entity: "IngresoPlataforma",
       entityId: ingreso.id,
       summary: `Registró el corte de ${validated.fields.plataforma} de la semana ${validated.fields.semana} por ${validated.fields.monto_corte}.`,

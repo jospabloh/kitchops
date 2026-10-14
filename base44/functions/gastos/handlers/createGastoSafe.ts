@@ -17,6 +17,18 @@ export async function handle(req: Request): Promise<Response> {
     const validated = validateGasto(body);
     if (!validated.ok) return Response.json({ message: validated.message }, { status: 400 });
 
+    // Born invoiced or born paid is the same decision as marking it later, so
+    // it carries the same key updateGastoSafe demands. Without this, a staff
+    // member without Gastos:mark_pagado could skip the edit path's check by
+    // creating the expense already settled.
+    const extraKeys: string[] = [];
+    if (validated.fields.facturado === true) extraKeys.push("Gastos:mark_facturado");
+    if (validated.fields.pagado === true) extraKeys.push("Gastos:mark_pagado");
+    for (const key of extraKeys) {
+      const sub = await guard(base44, body, key);
+      if (!sub.ok) return sub.response;
+    }
+
     const gasto = await g.sr.entities.Gasto.create({
       ...validated.fields,
       business_id: g.businessId,

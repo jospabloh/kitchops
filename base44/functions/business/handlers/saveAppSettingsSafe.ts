@@ -31,11 +31,19 @@ export async function handle(req: Request): Promise<Response> {
       }
       patch[field] = n;
     }
+    const existingRows = await g.sr.entities.AppSettings.filter({ business_id: g.businessId }, null, 1);
+    const existing = existingRows?.[0] || null;
+
     // A "critical" threshold below the warning one produces alerts that are red
-    // before they are yellow — the thresholds would be silently inverted.
-    const umbral = Number(patch.gasto_alto_umbral_pct ?? g.business.gasto_alto_umbral_pct ?? 20);
-    const critico = Number(patch.gasto_alto_critico_pct ?? 50);
-    if (patch.gasto_alto_critico_pct !== undefined && critico < umbral) {
+    // before they are yellow — the thresholds would be silently inverted. The
+    // side the patch leaves out comes from the SAVED settings (they live in
+    // AppSettings, not Business), so a partial save is checked against what
+    // is actually stored.
+    const umbral = Number(patch.gasto_alto_umbral_pct ?? existing?.gasto_alto_umbral_pct ?? 20);
+    const critico = Number(patch.gasto_alto_critico_pct ?? existing?.gasto_alto_critico_pct ?? 50);
+    const tocaUmbrales =
+      patch.gasto_alto_umbral_pct !== undefined || patch.gasto_alto_critico_pct !== undefined;
+    if (tocaUmbrales && critico < umbral) {
       return Response.json(
         { message: "El umbral crítico no puede ser menor que el umbral de aviso." },
         { status: 400 },
@@ -71,9 +79,6 @@ export async function handle(req: Request): Promise<Response> {
     if (Object.keys(patch).length === 0) {
       return Response.json({ message: "No mandaste ningún ajuste." }, { status: 400 });
     }
-
-    const existingRows = await g.sr.entities.AppSettings.filter({ business_id: g.businessId }, null, 1);
-    const existing = existingRows?.[0] || null;
 
     const saved = existing
       ? await g.sr.entities.AppSettings.update(existing.id, patch)

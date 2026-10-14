@@ -4,11 +4,15 @@ import { writeAudit } from "./_audit.ts";
 
 // Stock adjustment as a DELTA, not an absolute value.
 //
-// This is the difference that matters in a kitchen: two people counting the
-// walk-in at the same time both send "quedan 8 kg" and the second write silently
-// erases the first. Sending "-3" and "-2" from the same starting point still
-// lands at the right number. It is also the shape the WhatsApp agent speaks in
-// ("saqué 3 kilos de carne"), so both callers go through one path.
+// A delta says what happened ("saqué 3 kilos de carne"), which is the shape the
+// WhatsApp agent speaks in, so both callers go through one path, and it never
+// asks the caller to know the current count.
+//
+// It does NOT make two simultaneous adjustments safe. The server still reads
+// stock_actual, adds the delta and writes the absolute result, and the SDK has
+// no atomic increment or conditional update: "-3" and "-2" arriving at the
+// same instant can both read 10 and land on 7 or 8 instead of 5. Rare in
+// practice (the window is one round-trip), and a recount with `set` fixes it.
 //
 // `set` is still available for a real recount, where overwriting IS the intent —
 // but it has to be asked for explicitly rather than being the default.
@@ -84,7 +88,9 @@ export async function handle(req: Request): Promise<Response> {
       nuevo,
       // Handy for the caller (and for the bot's reply) to say "ya estás por
       // debajo del mínimo" without a second round-trip.
-      bajo_minimo: nuevo <= Number(existing.stock_minimo ?? 0),
+      // A minimum of 0 means "sin alertas" (the form says so), same as the
+      // alert engine and the client's bajo().
+      bajo_minimo: Number(existing.stock_minimo ?? 0) > 0 && nuevo <= Number(existing.stock_minimo),
     });
   } catch (error) {
     return Response.json({ message: (error as Error).message }, { status: 500 });
